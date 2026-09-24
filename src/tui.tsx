@@ -98,15 +98,8 @@ function SessionRow(props: {
 }) {
   const context = props.context
   const status = createMemo(() => context.data.session.status?.(props.session.id))
-  // Working when the session's activity is newer than its last idle mark.
-  const busy = () => {
-    const t = props.session.time ?? {}
-    const updated = t.updated ?? 0
-    const idle = t.idle ?? 0
-    const activeByTime = updated > 0 && idle > 0 && updated > idle
-    return activeByTime || props.working()[props.session.id] === true
-  }
-  const retry = () => status()?.type === "retry"
+  const busy = () => status() === "running" || props.working()[props.session.id] === true
+  const retry = () => status() === "retry"
 
   // Blocked states come from the session data: permission -> "!", question form -> "?".
   // Returns "none" when the store is authoritative and empty (so stale event kinds are ignored).
