@@ -93,6 +93,8 @@ function SessionRow(props: {
   unread?: boolean
   current?: boolean
   onToggleArchive?: () => void
+  localUnread?: boolean
+  onToggleUnread?: () => void
 }) {
   const context = props.context
   const status = createMemo(() => context.data.session.status?.(props.session.id))
@@ -179,11 +181,26 @@ function SessionRow(props: {
         truncate
         flexGrow={1}
         minWidth={0}
-        onMouseUp={() =>
+        onMouseUp={() => {
+          if (props.localUnread) props.onToggleUnread?.()
           context.ui.router.navigate({ type: "session", sessionID: props.session.id })
-        }
+        }}
       >
         {displayTitle(props.session)}
+      </text>
+      <text
+        fg={
+          props.localUnread
+            ? context.theme.hue?.purple?.[200] ?? context.theme.text.base
+            : context.theme.text.muted
+        }
+        flexShrink={0}
+        onMouseUp={(e: any) => {
+          e?.stopPropagation?.()
+          props.onToggleUnread?.()
+        }}
+      >
+        {props.localUnread ? "•" : "·"}
       </text>
       <text
         fg={context.theme.text.muted}
@@ -212,6 +229,8 @@ function SessionsByProject(props: {
   toggleArchived: () => void
   createSession: (dir?: string) => void
   toggleArchive: (id: string) => void
+  unreadLocal: () => Record<string, boolean>
+  toggleUnread: (id: string) => void
 }) {
   const context = props.context
   const groups = createMemo(() =>
@@ -298,9 +317,14 @@ function SessionsByProject(props: {
                       frame={frame}
                       working={props.working}
                       eventKind={props.kinds()[session.id]}
-                      unread={Boolean(tabs().get(session.id)?.unread)}
+                      unread={
+                        Boolean(tabs().get(session.id)?.unread) ||
+                        props.unreadLocal()[session.id] === true
+                      }
                       current={session.id === props.sessionID}
                       onToggleArchive={() => props.toggleArchive(session.id)}
+                      localUnread={props.unreadLocal()[session.id] === true}
+                      onToggleUnread={() => props.toggleUnread(session.id)}
                     />
                   )}
                 </For>
@@ -537,6 +561,30 @@ export default Plugin.define({
       toggleArchived = () => setSig((v) => !v)
     }
 
+    // Manual "unread" flags kept by the plugin (OpenCode has no unread setter).
+    let unreadLocal: () => Record<string, boolean>
+    let toggleUnread: (id: string) => void
+    try {
+      const [store, update] = context.storage.store("jump-sidebar.unread", { initial: {} })
+      const read = () => (typeof store === "function" ? store() : store) ?? {}
+      unreadLocal = read
+      toggleUnread = (id) =>
+        update((draft: any) => {
+          if (draft[id]) delete draft[id]
+          else draft[id] = true
+        })
+    } catch {
+      const [sig, set] = createSignal<Record<string, boolean>>({})
+      unreadLocal = sig
+      toggleUnread = (id) =>
+        set((prev) => {
+          const next = { ...prev }
+          if (next[id]) delete next[id]
+          else next[id] = true
+          return next
+        })
+    }
+
     // Archive/unarchive the current session using the same title convention as /archive.
     // Keymap layers must be registered from a rendered slot (as the built-ins do).
     context.ui.slot({
@@ -589,6 +637,8 @@ export default Plugin.define({
           toggleArchived={toggleArchived}
           createSession={createSession}
           toggleArchive={toggleArchive}
+          unreadLocal={unreadLocal}
+          toggleUnread={toggleUnread}
         />
       ),
     })
