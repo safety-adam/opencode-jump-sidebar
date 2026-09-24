@@ -56,6 +56,8 @@ The session sidebar gets a **Jump to session** section:
 - click `·` to mark a session unread (`•`); it clears when you open the session. This is a plugin-local flag stored on this machine — it does not change OpenCode's own unread state or other devices;
 - the `≡` toggle shows/hides archived sessions (archived = title starts with `[Archived] `).
 
+- the same panel also appears on the home / new-session screen as a right-hand overlay when the terminal is wide enough (≥120 cols);
+
 Press `Ctrl+X` then `Z` to archive/unarchive the current session (same title convention as the `/archive` command).
 
 ## Commands

@@ -330,6 +330,39 @@ function SessionsByProject(props: {
   )
 }
 
+// Shows the same panel on the home / new-session screen, as a right overlay.
+function HomeSidebar(props: { context: any; children?: any }) {
+  const context = props.context
+  const route = createMemo(() => context.ui.router.current())
+  const readWidth = () =>
+    context.renderer?.width ?? context.renderer?.size?.width ?? (globalThis as any)?.process?.stdout?.columns ?? 0
+  const [width, setWidth] = createSignal<number>(readWidth() || 0)
+  const timer = setInterval(() => {
+    const next = readWidth()
+    if (next && next !== width()) setWidth(next)
+  }, 500)
+  onCleanup(() => clearInterval(timer))
+
+  return (
+    <Show when={route()?.type === "home" && width() >= 120}>
+      <box
+        position="absolute"
+        top={0}
+        right={0}
+        bottom={0}
+        width={44}
+        backgroundColor={
+          context.theme.background?.raised?.base ?? context.theme.background?.element
+        }
+        paddingLeft={1}
+        paddingRight={1}
+      >
+        {props.children}
+      </box>
+    </Show>
+  )
+}
+
 export default Plugin.define({
   id: "jump-sidebar",
   setup(context: any) {
@@ -614,26 +647,33 @@ export default Plugin.define({
       },
     })
 
+    const sessionsPanel = (sessionID?: string) => (
+      <SessionsByProject
+        context={context}
+        sessionID={sessionID}
+        sessions={sessions}
+        projects={projects}
+        working={working}
+        kinds={kinds}
+        collapsed={collapsed}
+        toggle={toggle}
+        showArchived={showArchived}
+        toggleArchived={toggleArchived}
+        createSession={createSession}
+        toggleArchive={toggleArchive}
+        unreadLocal={unreadLocal}
+        toggleUnread={toggleUnread}
+      />
+    )
+
     context.ui.slot({
       append: "sidebar.content",
-      render: (input: any) => (
-        <SessionsByProject
-          context={context}
-          sessionID={input?.sessionID}
-          sessions={sessions}
-          projects={projects}
-          working={working}
-          kinds={kinds}
-          collapsed={collapsed}
-          toggle={toggle}
-          showArchived={showArchived}
-          toggleArchived={toggleArchived}
-          createSession={createSession}
-          toggleArchive={toggleArchive}
-          unreadLocal={unreadLocal}
-          toggleUnread={toggleUnread}
-        />
-      ),
+      render: (input: any) => sessionsPanel(input?.sessionID),
+    })
+
+    context.ui.slot({
+      append: "app",
+      render: () => <HomeSidebar context={context}>{sessionsPanel(undefined)}</HomeSidebar>,
     })
 
     return () => {
