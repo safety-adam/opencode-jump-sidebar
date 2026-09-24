@@ -52,6 +52,7 @@ The session sidebar gets a **Jump to session** section:
 - sessions within a project sorted by last updated;
 - status icon per session — orange spinner while working, `!` for a pending permission, `?` for a pending question, `•` for unread;
 - click a session to open it, `+` next to a project to create a session in it;
+- click `⇣` on a session to archive it, `⇡` to unarchive (same title convention as `/archive`);
 - the `≡` toggle shows/hides archived sessions (archived = title starts with `[Archived] `).
 
 Press `Ctrl+X` then `Z` to archive/unarchive the current session (same title convention as the `/archive` command).

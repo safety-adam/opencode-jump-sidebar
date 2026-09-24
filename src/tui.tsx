@@ -92,6 +92,7 @@ function SessionRow(props: {
   eventKind?: string
   unread?: boolean
   current?: boolean
+  onToggleArchive?: () => void
 }) {
   const context = props.context
   const status = createMemo(() => context.data.session.status?.(props.session.id))
@@ -184,6 +185,16 @@ function SessionRow(props: {
       >
         {displayTitle(props.session)}
       </text>
+      <text
+        fg={context.theme.text.muted}
+        flexShrink={0}
+        onMouseUp={(e: any) => {
+          e?.stopPropagation?.()
+          props.onToggleArchive?.()
+        }}
+      >
+        {isArchived(props.session) ? "⇡" : "⇣"}
+      </text>
     </box>
   )
 }
@@ -200,6 +211,7 @@ function SessionsByProject(props: {
   showArchived: () => boolean
   toggleArchived: () => void
   createSession: (dir?: string) => void
+  toggleArchive: (id: string) => void
 }) {
   const context = props.context
   const groups = createMemo(() =>
@@ -288,6 +300,7 @@ function SessionsByProject(props: {
                       eventKind={props.kinds()[session.id]}
                       unread={Boolean(tabs().get(session.id)?.unread)}
                       current={session.id === props.sessionID}
+                      onToggleArchive={() => props.toggleArchive(session.id)}
                     />
                   )}
                 </For>
@@ -494,6 +507,20 @@ export default Plugin.define({
       }
     }
 
+    // Archive/unarchive a session using the same title convention as /archive.
+    const toggleArchive = async (sessionID: string) => {
+      const session = sessions().find((s) => s.id === sessionID) ?? context.data.session.get?.(sessionID)
+      const title = session?.title ?? ""
+      const archived = title.startsWith(ARCHIVE_PREFIX)
+      const next = archived ? title.slice(ARCHIVE_PREFIX.length) : ARCHIVE_PREFIX + title
+      try {
+        await context.client.session.update({ sessionID, title: next })
+        schedule()
+      } catch (err: any) {
+        context.ui.toast.show({ message: `Archive failed: ${err?.message ?? err}`, variant: "error" })
+      }
+    }
+
     // Show/hide archived, persisted across restarts when storage is available.
     let showArchived: () => boolean
     let toggleArchived: () => void
@@ -533,20 +560,7 @@ export default Plugin.define({
                     context.ui.toast.show({ message: "Open a session first", variant: "warning" })
                     return
                   }
-                  const session =
-                    context.data.session.get?.(sessionID) ?? sessions().find((s) => s.id === sessionID)
-                  const title = session?.title ?? ""
-                  const archived = title.startsWith(ARCHIVE_PREFIX)
-                  const next = archived ? title.slice(ARCHIVE_PREFIX.length) : ARCHIVE_PREFIX + title
-                  try {
-                    await context.client.session.update({ sessionID, title: next })
-                    schedule()
-                  } catch (err: any) {
-                    context.ui.toast.show({
-                      message: `Archive failed: ${err?.message ?? err}`,
-                      variant: "error",
-                    })
-                  }
+                  await toggleArchive(sessionID)
                 },
               },
             ],
@@ -574,6 +588,7 @@ export default Plugin.define({
           showArchived={showArchived}
           toggleArchived={toggleArchived}
           createSession={createSession}
+          toggleArchive={toggleArchive}
         />
       ),
     })
