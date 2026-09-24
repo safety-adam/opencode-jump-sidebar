@@ -1,5 +1,7 @@
 # opencode-jump-sidebar
 
+<img width="417" height="340" alt="image" src="https://github.com/user-attachments/assets/e2d2b312-6e48-42b4-a3c1-70db3077b694" />
+
 An OpenCode plugin that adds:
 
 - **Jump to session** — a session sidebar section grouped by project, with per-project collapse, status icons, and a `+` to start a new session in that project.
