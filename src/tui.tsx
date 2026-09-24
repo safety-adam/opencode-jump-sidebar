@@ -347,7 +347,7 @@ function HomeSidebar(props: { context: any; children?: any }) {
     <Show when={route()?.type === "home" && width() >= 120}>
       <box
         position="absolute"
-        top={0}
+        top={1}
         right={0}
         bottom={0}
         width={44}
