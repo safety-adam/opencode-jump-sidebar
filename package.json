@@ -6,13 +6,22 @@
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
-    "./tui": "./src/tui.tsx"
+    "./server": "./src/index.ts",
+    "./tui": "./dist/tui.js"
   },
   "files": [
     "src",
+    "dist",
+    "scripts",
     "README.md",
-    "LICENSE"
+    "AGENTS.md",
+    "LICENSE",
+    "tsconfig.json"
   ],
+  "scripts": {
+    "build": "node scripts/build-tui.mjs",
+    "prepack": "npm run build"
+  },
   "keywords": [
     "opencode",
     "opencode-plugin",
@@ -22,6 +31,11 @@
   ],
   "dependencies": {
     "@opencode/plugin": "latest"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/preset-typescript": "^7.24.0",
+    "babel-preset-solid": "^1.9.0"
   },
   "peerDependencies": {
     "@opentui/core": ">=0.5.8",
