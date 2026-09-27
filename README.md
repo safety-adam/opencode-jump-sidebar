@@ -6,7 +6,7 @@ An OpenCode plugin that adds:
 
 - **Jump to session** — a session sidebar section grouped by project, with per-project collapse, status icons, and a `+` to start a new session in that project.
 - **`/new-project`** — create a project (a folder with a starter session).
-- **`/delete-project`** — remove projects that have no sessions.
+- **`/delete-project <name>`** — delete the named project when it has no sessions.
 
 Ships both a **server plugin** (the commands, available in every client) and a **CLI/TUI entry** (the sidebar).
 
@@ -82,7 +82,7 @@ Press `Ctrl+X` then `Z` to archive/unarchive the current session (same title con
 ## Commands
 
 - `/new-project <name>` — creates `<root>/<name>` (or an explicit path starting with `/` or `~`) and leaves a starter session in it.
-- `/delete-project` — removes every project with no sessions and restarts the service so the removal sticks.
+- `/delete-project <name>` — deletes the single project matching `<name>` (its name or folder) when that project has no sessions, then restarts the service so the removal sticks. It never deletes a project that has sessions, and it asks which project to delete when no name is supplied.
 
 ## Development
 
