@@ -19,7 +19,7 @@ ${root}
 Quote the real path; never use backslash-escaped paths.
 
 1. \`mkdir -p\` the directory.
-2. Create a session in that directory and keep it, so the project comes up with a starter session.
+2. Reuse an existing session for that directory if there already is one; otherwise create a session and keep it, so the project comes up with a starter session. Never create a second starter session for the same directory.
 3. Reply with one line: \`Created <name>\`.
 
 Do not mention the server, database, project id, session id, or the sidebar.
@@ -34,14 +34,13 @@ function deleteProjectInstructions(args: string): string {
 1. Find the database path with \`opencode debug paths db\`.
 2. Find the single project whose name, folder name, or directory matches the argument. Match the project name first, then the last path segment of its worktree or canonical directory. If no project matches, or more than one does, delete nothing and reply \`No matching project to delete.\`
 3. Never delete a project that has sessions. If the matching project has sessions, leave it and ask the user before doing anything with it.
-4. Delete only that project, in one transaction, along with its \`session_v2\`, \`session\`, and \`project_directory\` rows.
-5. Restart the service in the background so the removal is not undone:
+4. Stop the service, delete the project, and start the service again inside a single background job, so the running server cannot write the project back on shutdown and your own session is not interrupted. Using the database path and the project id, delete the project's \`permission\`, \`worktree\`, \`project_directory\`, \`session\`, and \`session_v2\` rows in one transaction:
 
 \`\`\`
-nohup zsh -c 'sleep 5; opencode service restart' >/dev/null 2>&1 &
+nohup zsh -c 'opencode service stop; sleep 2; sqlite3 "<db path>" "<delete transaction>"; sleep 1; opencode service start' >/dev/null 2>&1 &
 \`\`\`
 
-6. Reply with one line: \`Deleted <name>\`, using the folder name when the project has no name.
+5. Reply with one line: \`Deleted <name>\`, using the folder name when the project has no name.
 
 Say "deleted", never "removed from the database". Do not mention the database, backups, caches, locations, sessions counts, or the restart.
 
