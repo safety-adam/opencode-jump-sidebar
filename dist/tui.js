@@ -240,10 +240,10 @@ function SessionsByProject(props) {
     _$setProp(_el$0, "flexDirection", "row");
     _$setProp(_el$0, "gap", 1);
     _$setProp(_el$0, "flexShrink", 0);
-    _$insertNode(_el$1, _$createTextNode(`+`));
-    _$setProp(_el$1, "onMouseUp", () => props.newProject());
-    _$insertNode(_el$11, _$createTextNode(`≡`));
-    _$setProp(_el$11, "onMouseUp", () => props.toggleArchived());
+    _$insertNode(_el$1, _$createTextNode(`≡`));
+    _$setProp(_el$1, "onMouseUp", () => props.toggleArchived());
+    _$insertNode(_el$11, _$createTextNode(`+`));
+    _$setProp(_el$11, "onMouseUp", () => props.newProject());
     _$insert(_el$6, _$createComponent(For, {
       get each() {
         return groups();
@@ -336,8 +336,8 @@ function SessionsByProject(props) {
     }), null);
     _$effect(_p$ => {
       var _v$7 = context.theme.text.base,
-        _v$8 = context.theme.text.muted,
-        _v$9 = props.showArchived() ? context.theme.hue?.orange?.[200] ?? context.theme.text.base : context.theme.text.muted;
+        _v$8 = props.showArchived() ? context.theme.hue?.orange?.[200] ?? context.theme.text.base : context.theme.text.muted,
+        _v$9 = context.theme.text.muted;
       _v$7 !== _p$.e && (_p$.e = _$setProp(_el$8, "fg", _v$7, _p$.e));
       _v$8 !== _p$.t && (_p$.t = _$setProp(_el$1, "fg", _v$8, _p$.t));
       _v$9 !== _p$.a && (_p$.a = _$setProp(_el$11, "fg", _v$9, _p$.a));

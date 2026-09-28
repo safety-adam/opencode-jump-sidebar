@@ -258,12 +258,6 @@ function SessionsByProject(props: {
         </text>
         <box flexDirection="row" gap={1} flexShrink={0}>
           <text
-            fg={context.theme.text.muted}
-            onMouseUp={() => props.newProject()}
-          >
-            +
-          </text>
-          <text
             fg={
               props.showArchived()
                 ? context.theme.hue?.orange?.[200] ?? context.theme.text.base
@@ -272,6 +266,12 @@ function SessionsByProject(props: {
             onMouseUp={() => props.toggleArchived()}
           >
             ≡
+          </text>
+          <text
+            fg={context.theme.text.muted}
+            onMouseUp={() => props.newProject()}
+          >
+            +
           </text>
         </box>
       </box>
