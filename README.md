@@ -71,6 +71,7 @@ The session sidebar gets a **Jump to session** section:
 - sessions within a project sorted by last updated;
 - status icon per session — orange spinner while working, `!` for a pending permission, `?` for a pending question, `•` for unread;
 - click a session to open it, `+` next to a project to create a session in it;
+- click `+` on the **Jump to session** heading to create a new project: a prompt asks for the name, then it creates the folder (under the configured `root`) and a seeded session, the same result as `/new-project`;
 - click `⇣` on a session to archive it, `⇡` to unarchive (same title convention as `/archive`);
 - click `·` to mark a session unread (`•`); it clears when you open the session. This is a plugin-local flag stored on this machine — it does not change OpenCode's own unread state or other devices;
 - the `≡` toggle shows/hides archived sessions (archived = title starts with `[Archived] `).

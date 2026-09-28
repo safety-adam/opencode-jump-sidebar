@@ -1,5 +1,8 @@
 import { Plugin } from "@opencode/plugin/tui"
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js"
+import { mkdirSync } from "node:fs"
+import { homedir } from "node:os"
+import { isAbsolute, join } from "node:path"
 
 // Spinner frames used by the TUI for a busy/working session.
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -221,6 +224,7 @@ function SessionsByProject(props: {
   showArchived: () => boolean
   toggleArchived: () => void
   createSession: (dir?: string) => void
+  newProject: () => void
   toggleArchive: (id: string) => void
   unreadLocal: () => Record<string, boolean>
   toggleUnread: (id: string) => void
@@ -252,17 +256,24 @@ function SessionsByProject(props: {
         >
           Jump to session
         </text>
-        <text
-          fg={
-            props.showArchived()
-              ? context.theme.hue?.orange?.[200] ?? context.theme.text.base
-              : context.theme.text.muted
-          }
-          flexShrink={0}
-          onMouseUp={() => props.toggleArchived()}
-        >
-          ≡
-        </text>
+        <box flexDirection="row" gap={1} flexShrink={0}>
+          <text
+            fg={context.theme.text.muted}
+            onMouseUp={() => props.newProject()}
+          >
+            +
+          </text>
+          <text
+            fg={
+              props.showArchived()
+                ? context.theme.hue?.orange?.[200] ?? context.theme.text.base
+                : context.theme.text.muted
+            }
+            onMouseUp={() => props.toggleArchived()}
+          >
+            ≡
+          </text>
+        </box>
       </box>
       <For each={groups()}>
         {(group) => {
@@ -557,6 +568,66 @@ export default Plugin.define({
       }
     }
 
+    // UI-driven project creation: prompt for a name, then create the folder and a
+    // starter session (the same result as /new-project).
+    const root = typeof context.options?.root === "string" && context.options.root
+      ? context.options.root
+      : "~/OpenCode projects"
+    const expand = (p: string) =>
+      p === "~" ? homedir() : p.startsWith("~/") ? join(homedir(), p.slice(2)) : p
+
+    const newProject = async () => {
+      let input = ""
+      try {
+        input = (await context.ui.dialog.prompt({
+          title: "New project",
+          placeholder: "Project name",
+        })) ?? ""
+      } catch {
+        return
+      }
+      const name = String(input).trim()
+      if (!name) return
+
+      const rootDir = expand(root)
+      const dir = isAbsolute(name) || name.startsWith("~")
+        ? expand(name)
+        : join(rootDir, name)
+
+      try {
+        mkdirSync(dir, { recursive: true })
+      } catch (err: any) {
+        context.ui.toast.show({
+          message: `Could not create folder: ${err?.message ?? err}`,
+          variant: "error",
+        })
+        return
+      }
+
+      // Reuse an existing session for this directory; never seed a second one.
+      const existing = sessions().find(
+        (s) => !s.parentID && (s.location?.directory ?? s.directory) === dir,
+      )
+      if (existing) {
+        context.ui.router.navigate({ type: "session", sessionID: existing.id })
+        return
+      }
+
+      try {
+        const res: any = await context.client.session.create({ location: { directory: dir } })
+        const created = res?.data ?? res
+        const id = created?.id ?? created?.data?.id
+        if (id) context.ui.router.navigate({ type: "session", sessionID: id })
+        schedule()
+        setTimeout(() => void load(), 2000)
+      } catch (err: any) {
+        context.ui.toast.show({
+          message: `New project failed: ${err?.message ?? err}`,
+          variant: "error",
+        })
+      }
+    }
+
     // Archive/unarchive a session using the same title convention as /archive.
     const toggleArchive = async (sessionID: string) => {
       const session = sessions().find((s) => s.id === sessionID) ?? context.data.session.get?.(sessionID)
@@ -637,8 +708,18 @@ export default Plugin.define({
                   await toggleArchive(sessionID)
                 },
               },
+              {
+                id: "project.new",
+                title: "New project",
+                group: "Project",
+                bind: "<leader>p",
+                palette: true,
+                run: async () => {
+                  await newProject()
+                },
+              },
             ],
-            bindings: ["session.archive.toggle"],
+            bindings: ["session.archive.toggle", "project.new"],
           }))
         } catch {
           // keymap unavailable — the palette command simply won't register
@@ -660,6 +741,7 @@ export default Plugin.define({
         showArchived={showArchived}
         toggleArchived={toggleArchived}
         createSession={createSession}
+        newProject={newProject}
         toggleArchive={toggleArchive}
         unreadLocal={unreadLocal}
         toggleUnread={toggleUnread}

@@ -8,6 +8,9 @@ import { setProp as _$setProp } from "@opentui/solid";
 import { createElement as _$createElement } from "@opentui/solid";
 import { Plugin } from "@opencode/plugin/tui";
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
+import { mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { isAbsolute, join } from "node:path";
 
 // Spinner frames used by the TUI for a busy/working session.
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -216,7 +219,9 @@ function SessionsByProject(props) {
     var _el$6 = _$createElement("box"),
       _el$7 = _$createElement("box"),
       _el$8 = _$createElement("text"),
-      _el$0 = _$createElement("text");
+      _el$0 = _$createElement("box"),
+      _el$1 = _$createElement("text"),
+      _el$11 = _$createElement("text");
     _$insertNode(_el$6, _el$7);
     _$setProp(_el$6, "flexDirection", "column");
     _$setProp(_el$6, "paddingTop", 1);
@@ -230,9 +235,15 @@ function SessionsByProject(props) {
     _$setProp(_el$8, "minWidth", 0);
     _$setProp(_el$8, "wrapMode", "none");
     _$setProp(_el$8, "truncate", true);
-    _$insertNode(_el$0, _$createTextNode(`≡`));
+    _$insertNode(_el$0, _el$1);
+    _$insertNode(_el$0, _el$11);
+    _$setProp(_el$0, "flexDirection", "row");
+    _$setProp(_el$0, "gap", 1);
     _$setProp(_el$0, "flexShrink", 0);
-    _$setProp(_el$0, "onMouseUp", () => props.toggleArchived());
+    _$insertNode(_el$1, _$createTextNode(`+`));
+    _$setProp(_el$1, "onMouseUp", () => props.newProject());
+    _$insertNode(_el$11, _$createTextNode(`≡`));
+    _$setProp(_el$11, "onMouseUp", () => props.toggleArchived());
     _$insert(_el$6, _$createComponent(For, {
       get each() {
         return groups();
@@ -240,39 +251,39 @@ function SessionsByProject(props) {
       children: group => {
         const isCollapsed = () => props.collapsed()[group.key] === true;
         return (() => {
-          var _el$10 = _$createElement("box"),
-            _el$11 = _$createElement("box"),
-            _el$12 = _$createElement("box"),
-            _el$13 = _$createElement("text"),
-            _el$14 = _$createElement("text"),
-            _el$15 = _$createElement("text");
-          _$insertNode(_el$10, _el$11);
-          _$setProp(_el$10, "flexDirection", "column");
-          _$insertNode(_el$11, _el$12);
-          _$insertNode(_el$11, _el$15);
-          _$setProp(_el$11, "flexDirection", "row");
-          _$setProp(_el$11, "gap", 1);
-          _$insertNode(_el$12, _el$13);
-          _$insertNode(_el$12, _el$14);
-          _$setProp(_el$12, "flexDirection", "row");
-          _$setProp(_el$12, "gap", 1);
-          _$setProp(_el$12, "flexGrow", 1);
-          _$setProp(_el$12, "minWidth", 0);
-          _$setProp(_el$12, "onMouseUp", () => props.toggle(group.key));
-          _$setProp(_el$13, "flexShrink", 0);
-          _$insert(_el$13, () => isCollapsed() ? "▶" : "▼");
-          _$setProp(_el$14, "wrapMode", "none");
-          _$setProp(_el$14, "truncate", true);
-          _$setProp(_el$14, "flexGrow", 1);
-          _$setProp(_el$14, "minWidth", 0);
-          _$insert(_el$14, () => `${group.label} (${group.rows.length})`);
-          _$insertNode(_el$15, _$createTextNode(`+`));
-          _$setProp(_el$15, "flexShrink", 0);
-          _$setProp(_el$15, "onMouseUp", e => {
+          var _el$13 = _$createElement("box"),
+            _el$14 = _$createElement("box"),
+            _el$15 = _$createElement("box"),
+            _el$16 = _$createElement("text"),
+            _el$17 = _$createElement("text"),
+            _el$18 = _$createElement("text");
+          _$insertNode(_el$13, _el$14);
+          _$setProp(_el$13, "flexDirection", "column");
+          _$insertNode(_el$14, _el$15);
+          _$insertNode(_el$14, _el$18);
+          _$setProp(_el$14, "flexDirection", "row");
+          _$setProp(_el$14, "gap", 1);
+          _$insertNode(_el$15, _el$16);
+          _$insertNode(_el$15, _el$17);
+          _$setProp(_el$15, "flexDirection", "row");
+          _$setProp(_el$15, "gap", 1);
+          _$setProp(_el$15, "flexGrow", 1);
+          _$setProp(_el$15, "minWidth", 0);
+          _$setProp(_el$15, "onMouseUp", () => props.toggle(group.key));
+          _$setProp(_el$16, "flexShrink", 0);
+          _$insert(_el$16, () => isCollapsed() ? "▶" : "▼");
+          _$setProp(_el$17, "wrapMode", "none");
+          _$setProp(_el$17, "truncate", true);
+          _$setProp(_el$17, "flexGrow", 1);
+          _$setProp(_el$17, "minWidth", 0);
+          _$insert(_el$17, () => `${group.label} (${group.rows.length})`);
+          _$insertNode(_el$18, _$createTextNode(`+`));
+          _$setProp(_el$18, "flexShrink", 0);
+          _$setProp(_el$18, "onMouseUp", e => {
             e?.stopPropagation?.();
             props.createSession(group.dir);
           });
-          _$insert(_el$10, _$createComponent(Show, {
+          _$insert(_el$13, _$createComponent(Show, {
             get when() {
               return !isCollapsed();
             },
@@ -307,31 +318,34 @@ function SessionsByProject(props) {
             }
           }), null);
           _$effect(_p$ => {
-            var _v$9 = context.theme.text.muted,
-              _v$0 = context.theme.text.base,
-              _v$1 = context.theme.text.base;
-            _v$9 !== _p$.e && (_p$.e = _$setProp(_el$13, "fg", _v$9, _p$.e));
-            _v$0 !== _p$.t && (_p$.t = _$setProp(_el$14, "fg", _v$0, _p$.t));
-            _v$1 !== _p$.a && (_p$.a = _$setProp(_el$15, "fg", _v$1, _p$.a));
+            var _v$0 = context.theme.text.muted,
+              _v$1 = context.theme.text.base,
+              _v$10 = context.theme.text.base;
+            _v$0 !== _p$.e && (_p$.e = _$setProp(_el$16, "fg", _v$0, _p$.e));
+            _v$1 !== _p$.t && (_p$.t = _$setProp(_el$17, "fg", _v$1, _p$.t));
+            _v$10 !== _p$.a && (_p$.a = _$setProp(_el$18, "fg", _v$10, _p$.a));
             return _p$;
           }, {
             e: undefined,
             t: undefined,
             a: undefined
           });
-          return _el$10;
+          return _el$13;
         })();
       }
     }), null);
     _$effect(_p$ => {
       var _v$7 = context.theme.text.base,
-        _v$8 = props.showArchived() ? context.theme.hue?.orange?.[200] ?? context.theme.text.base : context.theme.text.muted;
+        _v$8 = context.theme.text.muted,
+        _v$9 = props.showArchived() ? context.theme.hue?.orange?.[200] ?? context.theme.text.base : context.theme.text.muted;
       _v$7 !== _p$.e && (_p$.e = _$setProp(_el$8, "fg", _v$7, _p$.e));
-      _v$8 !== _p$.t && (_p$.t = _$setProp(_el$0, "fg", _v$8, _p$.t));
+      _v$8 !== _p$.t && (_p$.t = _$setProp(_el$1, "fg", _v$8, _p$.t));
+      _v$9 !== _p$.a && (_p$.a = _$setProp(_el$11, "fg", _v$9, _p$.a));
       return _p$;
     }, {
       e: undefined,
-      t: undefined
+      t: undefined,
+      a: undefined
     });
     return _el$6;
   })();
@@ -353,17 +367,17 @@ function HomeSidebar(props) {
       return _$memo(() => route()?.type === "home")() && width() >= 120;
     },
     get children() {
-      var _el$17 = _$createElement("box");
-      _$setProp(_el$17, "position", "absolute");
-      _$setProp(_el$17, "top", 1);
-      _$setProp(_el$17, "right", 0);
-      _$setProp(_el$17, "bottom", 0);
-      _$setProp(_el$17, "width", 44);
-      _$setProp(_el$17, "paddingLeft", 1);
-      _$setProp(_el$17, "paddingRight", 1);
-      _$insert(_el$17, () => props.children);
-      _$effect(_$p => _$setProp(_el$17, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
-      return _el$17;
+      var _el$20 = _$createElement("box");
+      _$setProp(_el$20, "position", "absolute");
+      _$setProp(_el$20, "top", 1);
+      _$setProp(_el$20, "right", 0);
+      _$setProp(_el$20, "bottom", 0);
+      _$setProp(_el$20, "width", 44);
+      _$setProp(_el$20, "paddingLeft", 1);
+      _$setProp(_el$20, "paddingRight", 1);
+      _$insert(_el$20, () => props.children);
+      _$effect(_$p => _$setProp(_el$20, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
+      return _el$20;
     }
   });
 }
@@ -550,6 +564,67 @@ export default Plugin.define({
       }
     };
 
+    // UI-driven project creation: prompt for a name, then create the folder and a
+    // starter session (the same result as /new-project).
+    const root = typeof context.options?.root === "string" && context.options.root ? context.options.root : "~/OpenCode projects";
+    const expand = p => p === "~" ? homedir() : p.startsWith("~/") ? join(homedir(), p.slice(2)) : p;
+    const newProject = async () => {
+      let input = "";
+      try {
+        input = (await context.ui.dialog.prompt({
+          title: "New project",
+          placeholder: "Project name"
+        })) ?? "";
+      } catch {
+        return;
+      }
+      const name = String(input).trim();
+      if (!name) return;
+      const rootDir = expand(root);
+      const dir = isAbsolute(name) || name.startsWith("~") ? expand(name) : join(rootDir, name);
+      try {
+        mkdirSync(dir, {
+          recursive: true
+        });
+      } catch (err) {
+        context.ui.toast.show({
+          message: `Could not create folder: ${err?.message ?? err}`,
+          variant: "error"
+        });
+        return;
+      }
+
+      // Reuse an existing session for this directory; never seed a second one.
+      const existing = sessions().find(s => !s.parentID && (s.location?.directory ?? s.directory) === dir);
+      if (existing) {
+        context.ui.router.navigate({
+          type: "session",
+          sessionID: existing.id
+        });
+        return;
+      }
+      try {
+        const res = await context.client.session.create({
+          location: {
+            directory: dir
+          }
+        });
+        const created = res?.data ?? res;
+        const id = created?.id ?? created?.data?.id;
+        if (id) context.ui.router.navigate({
+          type: "session",
+          sessionID: id
+        });
+        schedule();
+        setTimeout(() => void load(), 2000);
+      } catch (err) {
+        context.ui.toast.show({
+          message: `New project failed: ${err?.message ?? err}`,
+          variant: "error"
+        });
+      }
+    };
+
     // Archive/unarchive a session using the same title convention as /archive.
     const toggleArchive = async sessionID => {
       const session = sessions().find(s => s.id === sessionID) ?? context.data.session.get?.(sessionID);
@@ -641,8 +716,17 @@ export default Plugin.define({
                 }
                 await toggleArchive(sessionID);
               }
+            }, {
+              id: "project.new",
+              title: "New project",
+              group: "Project",
+              bind: "<leader>p",
+              palette: true,
+              run: async () => {
+                await newProject();
+              }
             }],
-            bindings: ["session.archive.toggle"]
+            bindings: ["session.archive.toggle", "project.new"]
           }));
         } catch {
           // keymap unavailable — the palette command simply won't register
@@ -662,6 +746,7 @@ export default Plugin.define({
       showArchived: showArchived,
       toggleArchived: toggleArchived,
       createSession: createSession,
+      newProject: newProject,
       toggleArchive: toggleArchive,
       unreadLocal: unreadLocal,
       toggleUnread: toggleUnread
