@@ -367,7 +367,9 @@ function HomeSidebar(props) {
       return _$memo(() => route()?.type === "home")() && width() >= 120;
     },
     get children() {
-      var _el$20 = _$createElement("box");
+      var _el$20 = _$createElement("box"),
+        _el$21 = _$createElement("scrollbox");
+      _$insertNode(_el$20, _el$21);
       _$setProp(_el$20, "position", "absolute");
       _$setProp(_el$20, "top", 1);
       _$setProp(_el$20, "right", 0);
@@ -375,7 +377,13 @@ function HomeSidebar(props) {
       _$setProp(_el$20, "width", 44);
       _$setProp(_el$20, "paddingLeft", 1);
       _$setProp(_el$20, "paddingRight", 1);
-      _$insert(_el$20, () => props.children);
+      _$setProp(_el$21, "flexGrow", 1);
+      _$setProp(_el$21, "minHeight", 0);
+      _$setProp(_el$21, "width", "100%");
+      _$setProp(_el$21, "verticalScrollbarOptions", {
+        visible: true
+      });
+      _$insert(_el$21, () => props.children);
       _$effect(_$p => _$setProp(_el$20, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
       return _el$20;
     }

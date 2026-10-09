@@ -368,7 +368,14 @@ function HomeSidebar(props: { context: any; children?: any }) {
         paddingLeft={1}
         paddingRight={1}
       >
-        {props.children}
+        <scrollbox
+          flexGrow={1}
+          minHeight={0}
+          width="100%"
+          verticalScrollbarOptions={{ visible: true }}
+        >
+          {props.children}
+        </scrollbox>
       </box>
     </Show>
   )
