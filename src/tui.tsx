@@ -342,6 +342,35 @@ function SessionsByProject(props: {
 }
 
 // Shows the same panel on the home / new-session screen, as a right overlay.
+// Compact MCP connection indicator for the prompt footer, so it stays visible
+// after the sidebar's built-in MCP section is replaced.
+function McpStatus(props: { context: any }) {
+  const context = props.context
+  const servers = createMemo(
+    () => context.data?.location?.mcp?.server?.list?.(context.location) ?? [],
+  )
+  const failed = () => servers().filter((s: any) => s?.status?.status === "failed")
+  const connected = () => servers().filter((s: any) => s?.status?.status === "connected")
+
+  return (
+    <Show when={servers().length > 0}>
+      <text
+        fg={
+          failed().length > 0
+            ? context.theme.text.feedback?.error?.base ?? context.theme.text.base
+            : connected().length > 0
+              ? context.theme.text.feedback?.success?.base ?? context.theme.text.muted
+              : context.theme.text.muted
+        }
+      >
+        {failed().length > 0
+          ? `MCP ${failed().length} failed`
+          : `MCP ${connected().length}`}
+      </text>
+    </Show>
+  )
+}
+
 function HomeSidebar(props: { context: any; children?: any }) {
   const context = props.context
   const route = createMemo(() => context.ui.router.current())
@@ -756,8 +785,23 @@ export default Plugin.define({
     )
 
     context.ui.slot({
-      append: "sidebar.content",
-      render: (input: any) => sessionsPanel(input?.sessionID),
+      replace: "sidebar.content",
+      render: (input: any) => (
+        <scrollbox
+          flexGrow={1}
+          minHeight={0}
+          width="100%"
+          verticalScrollbarOptions={{ visible: true }}
+        >
+          {sessionsPanel(input?.sessionID)}
+        </scrollbox>
+      ),
+    })
+
+    // MCP status in the prompt footer, since the sidebar no longer shows it.
+    context.ui.slot({
+      append: "prompt.footer.status",
+      render: () => <McpStatus context={context} />,
     })
 
     context.ui.slot({

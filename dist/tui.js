@@ -352,6 +352,28 @@ function SessionsByProject(props) {
 }
 
 // Shows the same panel on the home / new-session screen, as a right overlay.
+// Compact MCP connection indicator for the prompt footer, so it stays visible
+// after the sidebar's built-in MCP section is replaced.
+function McpStatus(props) {
+  const context = props.context;
+  const servers = createMemo(() => context.data?.location?.mcp?.server?.list?.(context.location) ?? []);
+  const failed = () => servers().filter(s => s?.status?.status === "failed");
+  const connected = () => servers().filter(s => s?.status?.status === "connected");
+  return _$createComponent(Show, {
+    get when() {
+      return servers().length > 0;
+    },
+    get children() {
+      var _el$20 = _$createElement("text");
+      _$insert(_el$20, (() => {
+        var _c$ = _$memo(() => failed().length > 0);
+        return () => _c$() ? `MCP ${failed().length} failed` : `MCP ${connected().length}`;
+      })());
+      _$effect(_$p => _$setProp(_el$20, "fg", failed().length > 0 ? context.theme.text.feedback?.error?.base ?? context.theme.text.base : connected().length > 0 ? context.theme.text.feedback?.success?.base ?? context.theme.text.muted : context.theme.text.muted, _$p));
+      return _el$20;
+    }
+  });
+}
 function HomeSidebar(props) {
   const context = props.context;
   const route = createMemo(() => context.ui.router.current());
@@ -367,25 +389,25 @@ function HomeSidebar(props) {
       return _$memo(() => route()?.type === "home")() && width() >= 120;
     },
     get children() {
-      var _el$20 = _$createElement("box"),
-        _el$21 = _$createElement("scrollbox");
-      _$insertNode(_el$20, _el$21);
-      _$setProp(_el$20, "position", "absolute");
-      _$setProp(_el$20, "top", 1);
-      _$setProp(_el$20, "right", 0);
-      _$setProp(_el$20, "bottom", 0);
-      _$setProp(_el$20, "width", 44);
-      _$setProp(_el$20, "paddingLeft", 1);
-      _$setProp(_el$20, "paddingRight", 1);
-      _$setProp(_el$21, "flexGrow", 1);
-      _$setProp(_el$21, "minHeight", 0);
-      _$setProp(_el$21, "width", "100%");
-      _$setProp(_el$21, "verticalScrollbarOptions", {
+      var _el$21 = _$createElement("box"),
+        _el$22 = _$createElement("scrollbox");
+      _$insertNode(_el$21, _el$22);
+      _$setProp(_el$21, "position", "absolute");
+      _$setProp(_el$21, "top", 1);
+      _$setProp(_el$21, "right", 0);
+      _$setProp(_el$21, "bottom", 0);
+      _$setProp(_el$21, "width", 44);
+      _$setProp(_el$21, "paddingLeft", 1);
+      _$setProp(_el$21, "paddingRight", 1);
+      _$setProp(_el$22, "flexGrow", 1);
+      _$setProp(_el$22, "minHeight", 0);
+      _$setProp(_el$22, "width", "100%");
+      _$setProp(_el$22, "verticalScrollbarOptions", {
         visible: true
       });
-      _$insert(_el$21, () => props.children);
-      _$effect(_$p => _$setProp(_el$20, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
-      return _el$20;
+      _$insert(_el$22, () => props.children);
+      _$effect(_$p => _$setProp(_el$21, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
+      return _el$21;
     }
   });
 }
@@ -760,8 +782,26 @@ export default Plugin.define({
       toggleUnread: toggleUnread
     });
     context.ui.slot({
-      append: "sidebar.content",
-      render: input => sessionsPanel(input?.sessionID)
+      replace: "sidebar.content",
+      render: input => (() => {
+        var _el$23 = _$createElement("scrollbox");
+        _$setProp(_el$23, "flexGrow", 1);
+        _$setProp(_el$23, "minHeight", 0);
+        _$setProp(_el$23, "width", "100%");
+        _$setProp(_el$23, "verticalScrollbarOptions", {
+          visible: true
+        });
+        _$insert(_el$23, () => sessionsPanel(input?.sessionID));
+        return _el$23;
+      })()
+    });
+
+    // MCP status in the prompt footer, since the sidebar no longer shows it.
+    context.ui.slot({
+      append: "prompt.footer.status",
+      render: () => _$createComponent(McpStatus, {
+        context: context
+      })
     });
     context.ui.slot({
       append: "app",
