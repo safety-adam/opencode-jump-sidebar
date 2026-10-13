@@ -786,11 +786,13 @@ export default Plugin.define({
     // We own the sidebar scroll so the position survives session switches.
     // Bound the height so the host scrollbox does not add a second scrollbar.
     const [scrollY, setScrollY] = createSignal(0);
+    let pendingScroll = 0;
+    let scrollScheduled = false;
     const readHeight = () => context.renderer?.height ?? context.renderer?.size?.height ?? globalThis?.process?.stdout?.rows ?? 0;
-    const [avail, setAvail] = createSignal(Math.max(5, (readHeight() || 40) - 7));
+    const [avail, setAvail] = createSignal(Math.max(5, (readHeight() || 40) - 9));
     const heightTimer = setInterval(() => {
       const h = readHeight();
-      if (h) setAvail(Math.max(5, h - 7));
+      if (h) setAvail(Math.max(5, h - 9));
     }, 500);
     onCleanup(() => clearInterval(heightTimer));
 
@@ -815,6 +817,8 @@ export default Plugin.define({
         _$insertNode(_el$23, _el$24);
         _$setProp(_el$23, "flexDirection", "column");
         _$setProp(_el$23, "width", "100%");
+        _$setProp(_el$24, "flexGrow", 1);
+        _$setProp(_el$24, "minHeight", 0);
         _$setProp(_el$24, "width", "100%");
         _$setProp(_el$24, "verticalScrollbarOptions", {
           visible: true
@@ -822,22 +826,25 @@ export default Plugin.define({
         _$setProp(_el$24, "onMouseScroll", e => {
           const s = e?.scroll;
           if (!s) return;
-          const step = typeof s.delta === "number" ? s.delta : 1;
-          setScrollY(v => Math.max(0, v + (s.direction === "down" ? step : -step)));
+          pendingScroll += (s.direction === "down" ? 1 : -1) * (typeof s.delta === "number" ? s.delta : 1);
+          if (scrollScheduled) return;
+          scrollScheduled = true;
+          setTimeout(() => {
+            scrollScheduled = false;
+            setScrollY(v => Math.max(0, v + pendingScroll));
+            pendingScroll = 0;
+          }, 40);
         });
         _$insert(_el$24, () => sessionsPanel(input?.sessionID));
         _$effect(_p$ => {
           var _v$11 = avail(),
-            _v$12 = avail() - 1,
-            _v$13 = scrollY();
+            _v$12 = scrollY();
           _v$11 !== _p$.e && (_p$.e = _$setProp(_el$23, "height", _v$11, _p$.e));
-          _v$12 !== _p$.t && (_p$.t = _$setProp(_el$24, "height", _v$12, _p$.t));
-          _v$13 !== _p$.a && (_p$.a = _$setProp(_el$24, "scrollTop", _v$13, _p$.a));
+          _v$12 !== _p$.t && (_p$.t = _$setProp(_el$24, "scrollTop", _v$12, _p$.t));
           return _p$;
         }, {
           e: undefined,
-          t: undefined,
-          a: undefined
+          t: undefined
         });
         return _el$23;
       })()

@@ -788,15 +788,17 @@ export default Plugin.define({
     // We own the sidebar scroll so the position survives session switches.
     // Bound the height so the host scrollbox does not add a second scrollbar.
     const [scrollY, setScrollY] = createSignal(0)
+    let pendingScroll = 0
+    let scrollScheduled = false
     const readHeight = () =>
       context.renderer?.height ??
       context.renderer?.size?.height ??
       (globalThis as any)?.process?.stdout?.rows ??
       0
-    const [avail, setAvail] = createSignal(Math.max(5, (readHeight() || 40) - 7))
+    const [avail, setAvail] = createSignal(Math.max(5, (readHeight() || 40) - 9))
     const heightTimer = setInterval(() => {
       const h = readHeight()
-      if (h) setAvail(Math.max(5, h - 7))
+      if (h) setAvail(Math.max(5, h - 9))
     }, 500)
     onCleanup(() => clearInterval(heightTimer))
 
@@ -819,15 +821,22 @@ export default Plugin.define({
       render: (input: any) => (
         <box flexDirection="column" width="100%" height={avail()}>
           <scrollbox
-            height={avail() - 1}
+            flexGrow={1}
+            minHeight={0}
             width="100%"
             scrollTop={scrollY()}
             verticalScrollbarOptions={{ visible: true }}
             onMouseScroll={(e: any) => {
               const s: any = e?.scroll
               if (!s) return
-              const step = typeof s.delta === "number" ? s.delta : 1
-              setScrollY((v) => Math.max(0, v + (s.direction === "down" ? step : -step)))
+              pendingScroll += (s.direction === "down" ? 1 : -1) * (typeof s.delta === "number" ? s.delta : 1)
+              if (scrollScheduled) return
+              scrollScheduled = true
+              setTimeout(() => {
+                scrollScheduled = false
+                setScrollY((v) => Math.max(0, v + pendingScroll))
+                pendingScroll = 0
+              }, 40)
             }}
           >
             {sessionsPanel(input?.sessionID)}
