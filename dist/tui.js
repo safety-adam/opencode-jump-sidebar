@@ -365,6 +365,7 @@ function McpStatus(props) {
     },
     get children() {
       var _el$20 = _$createElement("text");
+      _$setProp(_el$20, "onMouseUp", () => context.keymap?.dispatch?.("mcp.list"));
       _$insert(_el$20, (() => {
         var _c$ = _$memo(() => failed().length > 0);
         return () => _c$() ? `MCP ${failed().length} failed` : `MCP ${connected().length}`;
@@ -781,17 +782,42 @@ export default Plugin.define({
       unreadLocal: unreadLocal,
       toggleUnread: toggleUnread
     });
+
+    // We own the sidebar scroll so the position survives session switches.
+    // Bound the height so the host scrollbox does not add a second scrollbar.
+    const [scrollY, setScrollY] = createSignal(0);
+    const readHeight = () => context.renderer?.height ?? context.renderer?.size?.height ?? globalThis?.process?.stdout?.rows ?? 0;
+    const [avail, setAvail] = createSignal(Math.max(5, (readHeight() || 40) - 7));
+    const heightTimer = setInterval(() => {
+      const h = readHeight();
+      if (h) setAvail(Math.max(5, h - 7));
+    }, 500);
+    onCleanup(() => clearInterval(heightTimer));
     context.ui.slot({
       replace: "sidebar.content",
       render: input => (() => {
         var _el$23 = _$createElement("scrollbox");
-        _$setProp(_el$23, "flexGrow", 1);
-        _$setProp(_el$23, "minHeight", 0);
         _$setProp(_el$23, "width", "100%");
         _$setProp(_el$23, "verticalScrollbarOptions", {
           visible: true
         });
+        _$setProp(_el$23, "onMouseScroll", e => {
+          const s = e?.scroll;
+          if (!s) return;
+          const step = typeof s.delta === "number" ? s.delta : 1;
+          setScrollY(v => Math.max(0, v + (s.direction === "down" ? step : -step)));
+        });
         _$insert(_el$23, () => sessionsPanel(input?.sessionID));
+        _$effect(_p$ => {
+          var _v$11 = avail(),
+            _v$12 = scrollY();
+          _v$11 !== _p$.e && (_p$.e = _$setProp(_el$23, "height", _v$11, _p$.e));
+          _v$12 !== _p$.t && (_p$.t = _$setProp(_el$23, "scrollTop", _v$12, _p$.t));
+          return _p$;
+        }, {
+          e: undefined,
+          t: undefined
+        });
         return _el$23;
       })()
     });

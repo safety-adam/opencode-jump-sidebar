@@ -362,6 +362,7 @@ function McpStatus(props: { context: any }) {
               ? context.theme.text.feedback?.success?.base ?? context.theme.text.muted
               : context.theme.text.muted
         }
+        onMouseUp={() => context.keymap?.dispatch?.("mcp.list")}
       >
         {failed().length > 0
           ? `MCP ${failed().length} failed`
@@ -784,14 +785,35 @@ export default Plugin.define({
       />
     )
 
+    // We own the sidebar scroll so the position survives session switches.
+    // Bound the height so the host scrollbox does not add a second scrollbar.
+    const [scrollY, setScrollY] = createSignal(0)
+    const readHeight = () =>
+      context.renderer?.height ??
+      context.renderer?.size?.height ??
+      (globalThis as any)?.process?.stdout?.rows ??
+      0
+    const [avail, setAvail] = createSignal(Math.max(5, (readHeight() || 40) - 7))
+    const heightTimer = setInterval(() => {
+      const h = readHeight()
+      if (h) setAvail(Math.max(5, h - 7))
+    }, 500)
+    onCleanup(() => clearInterval(heightTimer))
+
     context.ui.slot({
       replace: "sidebar.content",
       render: (input: any) => (
         <scrollbox
-          flexGrow={1}
-          minHeight={0}
+          height={avail()}
           width="100%"
+          scrollTop={scrollY()}
           verticalScrollbarOptions={{ visible: true }}
+          onMouseScroll={(e: any) => {
+            const s: any = e?.scroll
+            if (!s) return
+            const step = typeof s.delta === "number" ? s.delta : 1
+            setScrollY((v) => Math.max(0, v + (s.direction === "down" ? step : -step)))
+          }}
         >
           {sessionsPanel(input?.sessionID)}
         </scrollbox>
