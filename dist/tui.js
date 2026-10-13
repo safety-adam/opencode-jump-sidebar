@@ -782,70 +782,17 @@ export default Plugin.define({
       unreadLocal: unreadLocal,
       toggleUnread: toggleUnread
     });
-
-    // We own the sidebar scroll so the position survives session switches.
-    // Bound the height so the host scrollbox does not add a second scrollbar.
-    const [scrollY, setScrollY] = createSignal(0);
-    let pendingScroll = 0;
-    let scrollScheduled = false;
-    const readHeight = () => context.renderer?.height ?? context.renderer?.size?.height ?? globalThis?.process?.stdout?.rows ?? 0;
-    const [avail, setAvail] = createSignal(Math.max(5, (readHeight() || 40) - 9));
-    const heightTimer = setInterval(() => {
-      const h = readHeight();
-      if (h) setAvail(Math.max(5, h - 9));
-    }, 500);
-    onCleanup(() => clearInterval(heightTimer));
-
-    // On a session switch the scrollbox remounts and ignores the initial
-    // scrollTop, so nudge the value once to force it to apply.
-    let lastRouteID = "";
-    const routeTimer = setInterval(() => {
-      const route = context.ui.router.current();
-      const id = route?.type === "session" ? route.sessionID : "";
-      if (!id || id === lastRouteID) return;
-      lastRouteID = id;
-      const saved = scrollY();
-      setScrollY(saved + 1);
-      setTimeout(() => setScrollY(saved), 0);
-    }, 150);
-    onCleanup(() => clearInterval(routeTimer));
     context.ui.slot({
       replace: "sidebar.content",
       render: input => (() => {
-        var _el$23 = _$createElement("box"),
-          _el$24 = _$createElement("scrollbox");
-        _$insertNode(_el$23, _el$24);
-        _$setProp(_el$23, "flexDirection", "column");
+        var _el$23 = _$createElement("scrollbox");
+        _$setProp(_el$23, "flexGrow", 1);
+        _$setProp(_el$23, "minHeight", 0);
         _$setProp(_el$23, "width", "100%");
-        _$setProp(_el$24, "flexGrow", 1);
-        _$setProp(_el$24, "minHeight", 0);
-        _$setProp(_el$24, "width", "100%");
-        _$setProp(_el$24, "verticalScrollbarOptions", {
+        _$setProp(_el$23, "verticalScrollbarOptions", {
           visible: true
         });
-        _$setProp(_el$24, "onMouseScroll", e => {
-          const s = e?.scroll;
-          if (!s) return;
-          pendingScroll += (s.direction === "down" ? 1 : -1) * (typeof s.delta === "number" ? s.delta : 1);
-          if (scrollScheduled) return;
-          scrollScheduled = true;
-          setTimeout(() => {
-            scrollScheduled = false;
-            setScrollY(v => Math.max(0, v + pendingScroll));
-            pendingScroll = 0;
-          }, 40);
-        });
-        _$insert(_el$24, () => sessionsPanel(input?.sessionID));
-        _$effect(_p$ => {
-          var _v$11 = avail(),
-            _v$12 = scrollY();
-          _v$11 !== _p$.e && (_p$.e = _$setProp(_el$23, "height", _v$11, _p$.e));
-          _v$12 !== _p$.t && (_p$.t = _$setProp(_el$24, "scrollTop", _v$12, _p$.t));
-          return _p$;
-        }, {
-          e: undefined,
-          t: undefined
-        });
+        _$insert(_el$23, () => sessionsPanel(input?.sessionID));
         return _el$23;
       })()
     });

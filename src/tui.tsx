@@ -785,63 +785,17 @@ export default Plugin.define({
       />
     )
 
-    // We own the sidebar scroll so the position survives session switches.
-    // Bound the height so the host scrollbox does not add a second scrollbar.
-    const [scrollY, setScrollY] = createSignal(0)
-    let pendingScroll = 0
-    let scrollScheduled = false
-    const readHeight = () =>
-      context.renderer?.height ??
-      context.renderer?.size?.height ??
-      (globalThis as any)?.process?.stdout?.rows ??
-      0
-    const [avail, setAvail] = createSignal(Math.max(5, (readHeight() || 40) - 9))
-    const heightTimer = setInterval(() => {
-      const h = readHeight()
-      if (h) setAvail(Math.max(5, h - 9))
-    }, 500)
-    onCleanup(() => clearInterval(heightTimer))
-
-    // On a session switch the scrollbox remounts and ignores the initial
-    // scrollTop, so nudge the value once to force it to apply.
-    let lastRouteID = ""
-    const routeTimer = setInterval(() => {
-      const route: any = context.ui.router.current()
-      const id = route?.type === "session" ? route.sessionID : ""
-      if (!id || id === lastRouteID) return
-      lastRouteID = id
-      const saved = scrollY()
-      setScrollY(saved + 1)
-      setTimeout(() => setScrollY(saved), 0)
-    }, 150)
-    onCleanup(() => clearInterval(routeTimer))
-
     context.ui.slot({
       replace: "sidebar.content",
       render: (input: any) => (
-        <box flexDirection="column" width="100%" height={avail()}>
-          <scrollbox
-            flexGrow={1}
-            minHeight={0}
-            width="100%"
-            scrollTop={scrollY()}
-            verticalScrollbarOptions={{ visible: true }}
-            onMouseScroll={(e: any) => {
-              const s: any = e?.scroll
-              if (!s) return
-              pendingScroll += (s.direction === "down" ? 1 : -1) * (typeof s.delta === "number" ? s.delta : 1)
-              if (scrollScheduled) return
-              scrollScheduled = true
-              setTimeout(() => {
-                scrollScheduled = false
-                setScrollY((v) => Math.max(0, v + pendingScroll))
-                pendingScroll = 0
-              }, 40)
-            }}
-          >
-            {sessionsPanel(input?.sessionID)}
-          </scrollbox>
-        </box>
+        <scrollbox
+          flexGrow={1}
+          minHeight={0}
+          width="100%"
+          verticalScrollbarOptions={{ visible: true }}
+        >
+          {sessionsPanel(input?.sessionID)}
+        </scrollbox>
       ),
     })
 
