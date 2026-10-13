@@ -787,16 +787,7 @@ export default Plugin.define({
 
     context.ui.slot({
       replace: "sidebar.content",
-      render: (input: any) => (
-        <scrollbox
-          flexGrow={1}
-          minHeight={0}
-          width="100%"
-          verticalScrollbarOptions={{ visible: true }}
-        >
-          {sessionsPanel(input?.sessionID)}
-        </scrollbox>
-      ),
+      render: (input: any) => sessionsPanel(input?.sessionID),
     })
 
     // MCP status in the prompt footer, since the sidebar no longer shows it.
