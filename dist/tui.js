@@ -793,30 +793,51 @@ export default Plugin.define({
       if (h) setAvail(Math.max(5, h - 7));
     }, 500);
     onCleanup(() => clearInterval(heightTimer));
+
+    // On a session switch the scrollbox remounts and ignores the initial
+    // scrollTop, so nudge the value once to force it to apply.
+    let lastRouteID = "";
+    const routeTimer = setInterval(() => {
+      const route = context.ui.router.current();
+      const id = route?.type === "session" ? route.sessionID : "";
+      if (!id || id === lastRouteID) return;
+      lastRouteID = id;
+      const saved = scrollY();
+      setScrollY(saved + 1);
+      setTimeout(() => setScrollY(saved), 0);
+    }, 150);
+    onCleanup(() => clearInterval(routeTimer));
     context.ui.slot({
       replace: "sidebar.content",
       render: input => (() => {
-        var _el$23 = _$createElement("scrollbox");
+        var _el$23 = _$createElement("box"),
+          _el$24 = _$createElement("scrollbox");
+        _$insertNode(_el$23, _el$24);
+        _$setProp(_el$23, "flexDirection", "column");
         _$setProp(_el$23, "width", "100%");
-        _$setProp(_el$23, "verticalScrollbarOptions", {
+        _$setProp(_el$24, "width", "100%");
+        _$setProp(_el$24, "verticalScrollbarOptions", {
           visible: true
         });
-        _$setProp(_el$23, "onMouseScroll", e => {
+        _$setProp(_el$24, "onMouseScroll", e => {
           const s = e?.scroll;
           if (!s) return;
           const step = typeof s.delta === "number" ? s.delta : 1;
           setScrollY(v => Math.max(0, v + (s.direction === "down" ? step : -step)));
         });
-        _$insert(_el$23, () => sessionsPanel(input?.sessionID));
+        _$insert(_el$24, () => sessionsPanel(input?.sessionID));
         _$effect(_p$ => {
           var _v$11 = avail(),
-            _v$12 = scrollY();
+            _v$12 = avail() - 1,
+            _v$13 = scrollY();
           _v$11 !== _p$.e && (_p$.e = _$setProp(_el$23, "height", _v$11, _p$.e));
-          _v$12 !== _p$.t && (_p$.t = _$setProp(_el$23, "scrollTop", _v$12, _p$.t));
+          _v$12 !== _p$.t && (_p$.t = _$setProp(_el$24, "height", _v$12, _p$.t));
+          _v$13 !== _p$.a && (_p$.a = _$setProp(_el$24, "scrollTop", _v$13, _p$.a));
           return _p$;
         }, {
           e: undefined,
-          t: undefined
+          t: undefined,
+          a: undefined
         });
         return _el$23;
       })()

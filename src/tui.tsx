@@ -800,23 +800,39 @@ export default Plugin.define({
     }, 500)
     onCleanup(() => clearInterval(heightTimer))
 
+    // On a session switch the scrollbox remounts and ignores the initial
+    // scrollTop, so nudge the value once to force it to apply.
+    let lastRouteID = ""
+    const routeTimer = setInterval(() => {
+      const route: any = context.ui.router.current()
+      const id = route?.type === "session" ? route.sessionID : ""
+      if (!id || id === lastRouteID) return
+      lastRouteID = id
+      const saved = scrollY()
+      setScrollY(saved + 1)
+      setTimeout(() => setScrollY(saved), 0)
+    }, 150)
+    onCleanup(() => clearInterval(routeTimer))
+
     context.ui.slot({
       replace: "sidebar.content",
       render: (input: any) => (
-        <scrollbox
-          height={avail()}
-          width="100%"
-          scrollTop={scrollY()}
-          verticalScrollbarOptions={{ visible: true }}
-          onMouseScroll={(e: any) => {
-            const s: any = e?.scroll
-            if (!s) return
-            const step = typeof s.delta === "number" ? s.delta : 1
-            setScrollY((v) => Math.max(0, v + (s.direction === "down" ? step : -step)))
-          }}
-        >
-          {sessionsPanel(input?.sessionID)}
-        </scrollbox>
+        <box flexDirection="column" width="100%" height={avail()}>
+          <scrollbox
+            height={avail() - 1}
+            width="100%"
+            scrollTop={scrollY()}
+            verticalScrollbarOptions={{ visible: true }}
+            onMouseScroll={(e: any) => {
+              const s: any = e?.scroll
+              if (!s) return
+              const step = typeof s.delta === "number" ? s.delta : 1
+              setScrollY((v) => Math.max(0, v + (s.direction === "down" ? step : -step)))
+            }}
+          >
+            {sessionsPanel(input?.sessionID)}
+          </scrollbox>
+        </box>
       ),
     })
 
