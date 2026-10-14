@@ -158,12 +158,17 @@ function SessionRow(props: {
         context.theme.background?.action?.primary?.focused ??
         context.theme.background?.element
       : undefined
-  const titleColor = () =>
-    active()
-      ? context.theme.text?.action?.primary?.selected ??
+  const titleColor = () => {
+    if (active()) {
+      return context.theme.text?.action?.primary?.selected ??
         context.theme.text?.action?.primary?.focused ??
         context.theme.text.base
-      : context.theme.text.muted
+    }
+    if (props.unread) {
+      return context.theme.hue?.purple?.[200] ?? context.theme.text.feedback?.info?.base
+    }
+    return context.theme.text.muted
+  }
 
   return (
     <box flexDirection="row" gap={1} backgroundColor={rowBg()}>
