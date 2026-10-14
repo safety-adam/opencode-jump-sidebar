@@ -760,6 +760,21 @@ export default Plugin.define({
                   await newProject()
                 },
               },
+              {
+                id: "session.tabs.closeOthers",
+                title: "Close other tabs",
+                group: "Session",
+                palette: true,
+                run: async () => {
+                  const tabs = context.ui.tabs?.list?.() ?? []
+                  for (const tab of tabs) {
+                    if (tab.active) continue
+                    try {
+                      context.ui.tabs.close(tab.sessionID)
+                    } catch {}
+                  }
+                },
+              },
             ],
             bindings: ["session.archive.toggle", "project.new"],
           }))
