@@ -4,7 +4,7 @@ Guidance for agents and contributors working on this plugin.
 
 ## What this package is
 
-An OpenCode plugin with two halves that ship together:
+An OpenCode plugin with two halves that ship together.
 
 | File | Half | Loaded by |
 | --- | --- | --- |
@@ -20,14 +20,14 @@ compiled artifact, `dist/tui.js`, is committed to this repository and is what
 OpenCode only runs its Solid JSX transform on `.tsx` files **outside**
 `node_modules`. A plugin installed from npm or a git URL is unpacked under
 `node_modules`, so a raw `.tsx` TUI entry is handed to Bun's default JSX
-transform, which emits `import ... from "react"` — a package that is not
-installed. The plugin then fails with:
+transform, which emits `import ... from "react"`, a package that is not
+installed. The plugin then fails with this error.
 
 ```
 Cannot find package 'react' imported from .../node_modules/opencode-jump-sidebar/src/tui.tsx
 ```
 
-This is why the TUI entry must be precompiled:
+This is why the TUI entry must be precompiled.
 
 - **Never** set `exports["./tui"]` to `./src/tui.tsx`.
 - `exports["./tui"]` must be `./dist/tui.js`.
@@ -54,11 +54,11 @@ loads it directly on the server.
 
 ## Testing locally
 
-Fastest loop (no install, uses discovery — see below):
+Fastest loop, no install, uses discovery.
 
 1. Copy `index.ts` and `tui.tsx` (or `dist/tui.js`) into
    `~/.config/opencode/plugins/opencode-jump-sidebar/`.
-2. Run the TUI in a private server to avoid disturbing a running instance:
+2. Run the TUI in a private server to avoid disturbing a running instance.
    ```sh
    opencode --standalone --print-logs --log-level debug
    ```
@@ -66,7 +66,7 @@ Fastest loop (no install, uses discovery — see below):
    A `Cannot find package 'react'` error means a `.tsx` is being loaded from
    `node_modules` instead of `dist/tui.js`.
 
-To test the packaged install path, pack and install it:
+To test the packaged install path, pack and install it.
 
 ```sh
 npm pack

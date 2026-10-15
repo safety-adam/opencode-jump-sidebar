@@ -1,14 +1,14 @@
-import { createComponent as _$createComponent } from "@opentui/solid";
-import { createTextNode as _$createTextNode } from "@opentui/solid";
-import { effect as _$effect } from "@opentui/solid";
-import { insertNode as _$insertNode } from "@opentui/solid";
 import { memo as _$memo } from "@opentui/solid";
+import { createComponent as _$createComponent } from "@opentui/solid";
+import { effect as _$effect } from "@opentui/solid";
+import { createTextNode as _$createTextNode } from "@opentui/solid";
+import { insertNode as _$insertNode } from "@opentui/solid";
 import { insert as _$insert } from "@opentui/solid";
 import { setProp as _$setProp } from "@opentui/solid";
 import { createElement as _$createElement } from "@opentui/solid";
 import { Plugin } from "@opencode/plugin/tui";
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
@@ -46,6 +46,47 @@ function unwrap(result) {
   if (Array.isArray(result?.data)) return result.data;
   if (Array.isArray(result?.data?.data)) return result.data.data;
   return undefined;
+}
+
+// Session decorations. Other TUI plugins annotate session rows by dropping one
+// JSON file each into a shared directory. The sidebar merges them all and draws
+// a dot before the title and a label after it. No import between plugins, only
+// this contract.
+//
+//   directory  ~/.local/share/opencode/sidebar/decorations/
+//              override the parent with OPENCODE_SIDEBAR_DIR
+//   file       <plugin-id>.json, one per contributing plugin
+//   shape      { "sessions": { "<sessionID>": {
+//                  "dot":   { "color": "red", "title": "Recording" },
+//                  "label": "REC"
+//              } } }
+
+function readDecorations() {
+  try {
+    const base = process.env.OPENCODE_SIDEBAR_DIR || join(homedir(), ".local", "share", "opencode", "sidebar");
+    const dir = join(base, "decorations");
+    const merged = {};
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith(".json")) continue;
+      try {
+        const parsed = JSON.parse(readFileSync(join(dir, name), "utf8"));
+        const sessions = parsed?.sessions;
+        if (sessions && typeof sessions === "object") {
+          for (const [sid, dec] of Object.entries(sessions)) {
+            merged[sid] = {
+              ...(merged[sid] ?? {}),
+              ...dec
+            };
+          }
+        }
+      } catch {
+        // Skip a malformed file, keep the rest.
+      }
+    }
+    return merged;
+  } catch {
+    return {};
+  }
 }
 function groupSessions(sessions, projects, showArchived) {
   const byId = new Map(projects.map(p => [p.id, p]));
@@ -91,6 +132,7 @@ function groupSessions(sessions, projects, showArchived) {
 }
 function SessionRow(props) {
   const context = props.context;
+  const dotColor = () => props.decoration?.dot?.color ?? context.theme.hue?.red?.[200] ?? context.theme.text.feedback?.error?.base ?? "red";
   const status = createMemo(() => context.data.session.status?.(props.session.id));
   const busy = () => status() === "running" || props.working()[props.session.id] === true;
   const retry = () => status() === "retry";
@@ -153,41 +195,65 @@ function SessionRow(props) {
   return (() => {
     var _el$ = _$createElement("box"),
       _el$2 = _$createElement("text"),
-      _el$3 = _$createElement("text"),
-      _el$4 = _$createElement("text"),
-      _el$5 = _$createElement("text");
+      _el$6 = _$createElement("text"),
+      _el$7 = _$createElement("text"),
+      _el$8 = _$createElement("text");
     _$insertNode(_el$, _el$2);
-    _$insertNode(_el$, _el$3);
-    _$insertNode(_el$, _el$4);
-    _$insertNode(_el$, _el$5);
+    _$insertNode(_el$, _el$6);
+    _$insertNode(_el$, _el$7);
+    _$insertNode(_el$, _el$8);
     _$setProp(_el$, "flexDirection", "row");
     _$setProp(_el$, "gap", 1);
     _$setProp(_el$2, "flexShrink", 0);
     _$insert(_el$2, icon);
-    _$setProp(_el$3, "wrapMode", "none");
-    _$setProp(_el$3, "truncate", true);
-    _$setProp(_el$3, "flexGrow", 1);
-    _$setProp(_el$3, "minWidth", 0);
-    _$setProp(_el$3, "onMouseUp", () => {
+    _$insert(_el$, _$createComponent(Show, {
+      get when() {
+        return props.decoration?.dot;
+      },
+      get children() {
+        var _el$3 = _$createElement("text");
+        _$insertNode(_el$3, _$createTextNode(`●`));
+        _$setProp(_el$3, "flexShrink", 0);
+        _$effect(_$p => _$setProp(_el$3, "fg", dotColor(), _$p));
+        return _el$3;
+      }
+    }), _el$6);
+    _$insert(_el$, _$createComponent(Show, {
+      get when() {
+        return props.decoration?.label;
+      },
+      get children() {
+        var _el$5 = _$createElement("text");
+        _$setProp(_el$5, "flexShrink", 0);
+        _$insert(_el$5, () => props.decoration?.label);
+        _$effect(_$p => _$setProp(_el$5, "fg", context.theme.text.muted, _$p));
+        return _el$5;
+      }
+    }), _el$6);
+    _$setProp(_el$6, "wrapMode", "none");
+    _$setProp(_el$6, "truncate", true);
+    _$setProp(_el$6, "flexGrow", 1);
+    _$setProp(_el$6, "minWidth", 0);
+    _$setProp(_el$6, "onMouseUp", () => {
       if (props.localUnread) props.onToggleUnread?.();
       context.ui.router.navigate({
         type: "session",
         sessionID: props.session.id
       });
     });
-    _$insert(_el$3, () => displayTitle(props.session));
-    _$setProp(_el$4, "flexShrink", 0);
-    _$setProp(_el$4, "onMouseUp", e => {
+    _$insert(_el$6, () => displayTitle(props.session));
+    _$setProp(_el$7, "flexShrink", 0);
+    _$setProp(_el$7, "onMouseUp", e => {
       e?.stopPropagation?.();
       props.onToggleUnread?.();
     });
-    _$insert(_el$4, () => props.localUnread ? "•" : "·");
-    _$setProp(_el$5, "flexShrink", 0);
-    _$setProp(_el$5, "onMouseUp", e => {
+    _$insert(_el$7, () => props.localUnread ? "•" : "·");
+    _$setProp(_el$8, "flexShrink", 0);
+    _$setProp(_el$8, "onMouseUp", e => {
       e?.stopPropagation?.();
       props.onToggleArchive?.();
     });
-    _$insert(_el$5, () => isArchived(props.session) ? "⇡" : "⇣");
+    _$insert(_el$8, () => isArchived(props.session) ? "⇡" : "⇣");
     _$effect(_p$ => {
       var _v$ = rowBg(),
         _v$2 = iconColor(),
@@ -197,10 +263,10 @@ function SessionRow(props) {
         _v$6 = context.theme.text.muted;
       _v$ !== _p$.e && (_p$.e = _$setProp(_el$, "backgroundColor", _v$, _p$.e));
       _v$2 !== _p$.t && (_p$.t = _$setProp(_el$2, "fg", _v$2, _p$.t));
-      _v$3 !== _p$.a && (_p$.a = _$setProp(_el$3, "fg", _v$3, _p$.a));
-      _v$4 !== _p$.o && (_p$.o = _$setProp(_el$3, "attributes", _v$4, _p$.o));
-      _v$5 !== _p$.i && (_p$.i = _$setProp(_el$4, "fg", _v$5, _p$.i));
-      _v$6 !== _p$.n && (_p$.n = _$setProp(_el$5, "fg", _v$6, _p$.n));
+      _v$3 !== _p$.a && (_p$.a = _$setProp(_el$6, "fg", _v$3, _p$.a));
+      _v$4 !== _p$.o && (_p$.o = _$setProp(_el$6, "attributes", _v$4, _p$.o));
+      _v$5 !== _p$.i && (_p$.i = _$setProp(_el$7, "fg", _v$5, _p$.i));
+      _v$6 !== _p$.n && (_p$.n = _$setProp(_el$8, "fg", _v$6, _p$.n));
       return _p$;
     }, {
       e: undefined,
@@ -224,74 +290,74 @@ function SessionsByProject(props) {
     return new Map(list.map(t => [t.sessionID, t]));
   });
   return (() => {
-    var _el$6 = _$createElement("box"),
-      _el$7 = _$createElement("box"),
-      _el$8 = _$createElement("text"),
+    var _el$9 = _$createElement("box"),
       _el$0 = _$createElement("box"),
       _el$1 = _$createElement("text"),
-      _el$11 = _$createElement("text");
-    _$insertNode(_el$6, _el$7);
-    _$setProp(_el$6, "flexDirection", "column");
-    _$setProp(_el$6, "paddingTop", 1);
-    _$setProp(_el$6, "gap", 1);
-    _$insertNode(_el$7, _el$8);
-    _$insertNode(_el$7, _el$0);
-    _$setProp(_el$7, "flexDirection", "row");
-    _$insertNode(_el$8, _$createTextNode(`Jump to session`));
-    _$setProp(_el$8, "attributes", 1);
-    _$setProp(_el$8, "flexGrow", 1);
-    _$setProp(_el$8, "minWidth", 0);
-    _$setProp(_el$8, "wrapMode", "none");
-    _$setProp(_el$8, "truncate", true);
+      _el$11 = _$createElement("box"),
+      _el$12 = _$createElement("text"),
+      _el$14 = _$createElement("text");
+    _$insertNode(_el$9, _el$0);
+    _$setProp(_el$9, "flexDirection", "column");
+    _$setProp(_el$9, "paddingTop", 1);
+    _$setProp(_el$9, "gap", 1);
     _$insertNode(_el$0, _el$1);
     _$insertNode(_el$0, _el$11);
     _$setProp(_el$0, "flexDirection", "row");
-    _$setProp(_el$0, "gap", 1);
-    _$setProp(_el$0, "flexShrink", 0);
-    _$insertNode(_el$1, _$createTextNode(`≡`));
-    _$setProp(_el$1, "onMouseUp", () => props.toggleArchived());
-    _$insertNode(_el$11, _$createTextNode(`+`));
-    _$setProp(_el$11, "onMouseUp", () => props.newProject());
-    _$insert(_el$6, _$createComponent(For, {
+    _$insertNode(_el$1, _$createTextNode(`Jump to session`));
+    _$setProp(_el$1, "attributes", 1);
+    _$setProp(_el$1, "flexGrow", 1);
+    _$setProp(_el$1, "minWidth", 0);
+    _$setProp(_el$1, "wrapMode", "none");
+    _$setProp(_el$1, "truncate", true);
+    _$insertNode(_el$11, _el$12);
+    _$insertNode(_el$11, _el$14);
+    _$setProp(_el$11, "flexDirection", "row");
+    _$setProp(_el$11, "gap", 1);
+    _$setProp(_el$11, "flexShrink", 0);
+    _$insertNode(_el$12, _$createTextNode(`≡`));
+    _$setProp(_el$12, "onMouseUp", () => props.toggleArchived());
+    _$insertNode(_el$14, _$createTextNode(`+`));
+    _$setProp(_el$14, "onMouseUp", () => props.newProject());
+    _$insert(_el$9, _$createComponent(For, {
       get each() {
         return groups();
       },
       children: group => {
         const isCollapsed = () => props.collapsed()[group.key] === true;
         return (() => {
-          var _el$13 = _$createElement("box"),
-            _el$14 = _$createElement("box"),
-            _el$15 = _$createElement("box"),
-            _el$16 = _$createElement("text"),
-            _el$17 = _$createElement("text"),
-            _el$18 = _$createElement("text");
-          _$insertNode(_el$13, _el$14);
-          _$setProp(_el$13, "flexDirection", "column");
-          _$insertNode(_el$14, _el$15);
-          _$insertNode(_el$14, _el$18);
-          _$setProp(_el$14, "flexDirection", "row");
-          _$setProp(_el$14, "gap", 1);
-          _$insertNode(_el$15, _el$16);
-          _$insertNode(_el$15, _el$17);
-          _$setProp(_el$15, "flexDirection", "row");
-          _$setProp(_el$15, "gap", 1);
-          _$setProp(_el$15, "flexGrow", 1);
-          _$setProp(_el$15, "minWidth", 0);
-          _$setProp(_el$15, "onMouseUp", () => props.toggle(group.key));
-          _$setProp(_el$16, "flexShrink", 0);
-          _$insert(_el$16, () => isCollapsed() ? "▶" : "▼");
-          _$setProp(_el$17, "wrapMode", "none");
-          _$setProp(_el$17, "truncate", true);
-          _$setProp(_el$17, "flexGrow", 1);
-          _$setProp(_el$17, "minWidth", 0);
-          _$insert(_el$17, () => `${group.label} (${group.rows.length})`);
-          _$insertNode(_el$18, _$createTextNode(`+`));
-          _$setProp(_el$18, "flexShrink", 0);
-          _$setProp(_el$18, "onMouseUp", e => {
+          var _el$16 = _$createElement("box"),
+            _el$17 = _$createElement("box"),
+            _el$18 = _$createElement("box"),
+            _el$19 = _$createElement("text"),
+            _el$20 = _$createElement("text"),
+            _el$21 = _$createElement("text");
+          _$insertNode(_el$16, _el$17);
+          _$setProp(_el$16, "flexDirection", "column");
+          _$insertNode(_el$17, _el$18);
+          _$insertNode(_el$17, _el$21);
+          _$setProp(_el$17, "flexDirection", "row");
+          _$setProp(_el$17, "gap", 1);
+          _$insertNode(_el$18, _el$19);
+          _$insertNode(_el$18, _el$20);
+          _$setProp(_el$18, "flexDirection", "row");
+          _$setProp(_el$18, "gap", 1);
+          _$setProp(_el$18, "flexGrow", 1);
+          _$setProp(_el$18, "minWidth", 0);
+          _$setProp(_el$18, "onMouseUp", () => props.toggle(group.key));
+          _$setProp(_el$19, "flexShrink", 0);
+          _$insert(_el$19, () => isCollapsed() ? "▶" : "▼");
+          _$setProp(_el$20, "wrapMode", "none");
+          _$setProp(_el$20, "truncate", true);
+          _$setProp(_el$20, "flexGrow", 1);
+          _$setProp(_el$20, "minWidth", 0);
+          _$insert(_el$20, () => `${group.label} (${group.rows.length})`);
+          _$insertNode(_el$21, _$createTextNode(`+`));
+          _$setProp(_el$21, "flexShrink", 0);
+          _$setProp(_el$21, "onMouseUp", e => {
             e?.stopPropagation?.();
             props.createSession(group.dir);
           });
-          _$insert(_el$13, _$createComponent(Show, {
+          _$insert(_el$16, _$createComponent(Show, {
             get when() {
               return !isCollapsed();
             },
@@ -316,6 +382,9 @@ function SessionsByProject(props) {
                   get current() {
                     return session.id === props.sessionID;
                   },
+                  get decoration() {
+                    return props.decorations()[session.id];
+                  },
                   onToggleArchive: () => props.toggleArchive(session.id),
                   get localUnread() {
                     return props.unreadLocal()[session.id] === true;
@@ -329,16 +398,16 @@ function SessionsByProject(props) {
             var _v$0 = context.theme.text.muted,
               _v$1 = context.theme.text.base,
               _v$10 = context.theme.text.base;
-            _v$0 !== _p$.e && (_p$.e = _$setProp(_el$16, "fg", _v$0, _p$.e));
-            _v$1 !== _p$.t && (_p$.t = _$setProp(_el$17, "fg", _v$1, _p$.t));
-            _v$10 !== _p$.a && (_p$.a = _$setProp(_el$18, "fg", _v$10, _p$.a));
+            _v$0 !== _p$.e && (_p$.e = _$setProp(_el$19, "fg", _v$0, _p$.e));
+            _v$1 !== _p$.t && (_p$.t = _$setProp(_el$20, "fg", _v$1, _p$.t));
+            _v$10 !== _p$.a && (_p$.a = _$setProp(_el$21, "fg", _v$10, _p$.a));
             return _p$;
           }, {
             e: undefined,
             t: undefined,
             a: undefined
           });
-          return _el$13;
+          return _el$16;
         })();
       }
     }), null);
@@ -346,16 +415,16 @@ function SessionsByProject(props) {
       var _v$7 = context.theme.text.base,
         _v$8 = props.showArchived() ? context.theme.hue?.orange?.[200] ?? context.theme.text.base : context.theme.text.muted,
         _v$9 = context.theme.text.muted;
-      _v$7 !== _p$.e && (_p$.e = _$setProp(_el$8, "fg", _v$7, _p$.e));
-      _v$8 !== _p$.t && (_p$.t = _$setProp(_el$1, "fg", _v$8, _p$.t));
-      _v$9 !== _p$.a && (_p$.a = _$setProp(_el$11, "fg", _v$9, _p$.a));
+      _v$7 !== _p$.e && (_p$.e = _$setProp(_el$1, "fg", _v$7, _p$.e));
+      _v$8 !== _p$.t && (_p$.t = _$setProp(_el$12, "fg", _v$8, _p$.t));
+      _v$9 !== _p$.a && (_p$.a = _$setProp(_el$14, "fg", _v$9, _p$.a));
       return _p$;
     }, {
       e: undefined,
       t: undefined,
       a: undefined
     });
-    return _el$6;
+    return _el$9;
   })();
 }
 
@@ -372,14 +441,14 @@ function McpStatus(props) {
       return servers().length > 0;
     },
     get children() {
-      var _el$20 = _$createElement("text");
-      _$setProp(_el$20, "onMouseUp", () => context.keymap?.dispatch?.("mcp.list"));
-      _$insert(_el$20, (() => {
+      var _el$23 = _$createElement("text");
+      _$setProp(_el$23, "onMouseUp", () => context.keymap?.dispatch?.("mcp.list"));
+      _$insert(_el$23, (() => {
         var _c$ = _$memo(() => failed().length > 0);
         return () => _c$() ? `MCP ${failed().length} failed` : `MCP ${connected().length}`;
       })());
-      _$effect(_$p => _$setProp(_el$20, "fg", failed().length > 0 ? context.theme.text.feedback?.error?.base ?? context.theme.text.base : connected().length > 0 ? context.theme.text.feedback?.success?.base ?? context.theme.text.muted : context.theme.text.muted, _$p));
-      return _el$20;
+      _$effect(_$p => _$setProp(_el$23, "fg", failed().length > 0 ? context.theme.text.feedback?.error?.base ?? context.theme.text.base : connected().length > 0 ? context.theme.text.feedback?.success?.base ?? context.theme.text.muted : context.theme.text.muted, _$p));
+      return _el$23;
     }
   });
 }
@@ -398,25 +467,25 @@ function HomeSidebar(props) {
       return _$memo(() => route()?.type === "home")() && width() >= 120;
     },
     get children() {
-      var _el$21 = _$createElement("box"),
-        _el$22 = _$createElement("scrollbox");
-      _$insertNode(_el$21, _el$22);
-      _$setProp(_el$21, "position", "absolute");
-      _$setProp(_el$21, "top", 1);
-      _$setProp(_el$21, "right", 0);
-      _$setProp(_el$21, "bottom", 0);
-      _$setProp(_el$21, "width", 44);
-      _$setProp(_el$21, "paddingLeft", 1);
-      _$setProp(_el$21, "paddingRight", 1);
-      _$setProp(_el$22, "flexGrow", 1);
-      _$setProp(_el$22, "minHeight", 0);
-      _$setProp(_el$22, "width", "100%");
-      _$setProp(_el$22, "verticalScrollbarOptions", {
+      var _el$24 = _$createElement("box"),
+        _el$25 = _$createElement("scrollbox");
+      _$insertNode(_el$24, _el$25);
+      _$setProp(_el$24, "position", "absolute");
+      _$setProp(_el$24, "top", 1);
+      _$setProp(_el$24, "right", 0);
+      _$setProp(_el$24, "bottom", 0);
+      _$setProp(_el$24, "width", 44);
+      _$setProp(_el$24, "paddingLeft", 1);
+      _$setProp(_el$24, "paddingRight", 1);
+      _$setProp(_el$25, "flexGrow", 1);
+      _$setProp(_el$25, "minHeight", 0);
+      _$setProp(_el$25, "width", "100%");
+      _$setProp(_el$25, "verticalScrollbarOptions", {
         visible: true
       });
-      _$insert(_el$22, () => props.children);
-      _$effect(_$p => _$setProp(_el$21, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
-      return _el$21;
+      _$insert(_el$25, () => props.children);
+      _$effect(_$p => _$setProp(_el$24, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
+      return _el$24;
     }
   });
 }
@@ -427,6 +496,7 @@ export default Plugin.define({
     const [projects, setProjects] = createSignal([]);
     const [working, setWorking] = createSignal({});
     const [kinds, setKinds] = createSignal({});
+    const [decorations, setDecorations] = createSignal({});
     const setWork = (id, on) => setWorking(prev => prev[id] === on ? prev : {
       ...prev,
       [id]: on
@@ -455,6 +525,7 @@ export default Plugin.define({
     } : s) : prev);
     let refetchTimer;
     const load = async () => {
+      setDecorations(readDecorations());
       try {
         // Bust the client's cached project list so deletions are picked up.
         try {
@@ -802,7 +873,8 @@ export default Plugin.define({
       newProject: newProject,
       toggleArchive: toggleArchive,
       unreadLocal: unreadLocal,
-      toggleUnread: toggleUnread
+      toggleUnread: toggleUnread,
+      decorations: decorations
     });
     context.ui.slot({
       replace: "sidebar.content",

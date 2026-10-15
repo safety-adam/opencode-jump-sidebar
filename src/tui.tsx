@@ -1,6 +1,6 @@
 import { Plugin } from "@opencode/plugin/tui"
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js"
-import { mkdirSync } from "node:fs"
+import { mkdirSync, readFileSync, readdirSync } from "node:fs"
 import { homedir } from "node:os"
 import { isAbsolute, join } from "node:path"
 
@@ -42,6 +42,50 @@ function unwrap(result: any): any[] | undefined {
   if (Array.isArray(result?.data)) return result.data
   if (Array.isArray(result?.data?.data)) return result.data.data
   return undefined
+}
+
+// Session decorations. Other TUI plugins annotate session rows by dropping one
+// JSON file each into a shared directory. The sidebar merges them all and draws
+// a dot before the title and a label after it. No import between plugins, only
+// this contract.
+//
+//   directory  ~/.local/share/opencode/sidebar/decorations/
+//              override the parent with OPENCODE_SIDEBAR_DIR
+//   file       <plugin-id>.json, one per contributing plugin
+//   shape      { "sessions": { "<sessionID>": {
+//                  "dot":   { "color": "red", "title": "Recording" },
+//                  "label": "REC"
+//              } } }
+type Decoration = {
+  dot?: { color?: string; title?: string }
+  label?: string
+}
+
+function readDecorations(): Record<string, Decoration> {
+  try {
+    const base =
+      process.env.OPENCODE_SIDEBAR_DIR ||
+      join(homedir(), ".local", "share", "opencode", "sidebar")
+    const dir = join(base, "decorations")
+    const merged: Record<string, Decoration> = {}
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith(".json")) continue
+      try {
+        const parsed = JSON.parse(readFileSync(join(dir, name), "utf8"))
+        const sessions = parsed?.sessions
+        if (sessions && typeof sessions === "object") {
+          for (const [sid, dec] of Object.entries(sessions)) {
+            merged[sid] = { ...(merged[sid] ?? {}), ...(dec as Decoration) }
+          }
+        }
+      } catch {
+        // Skip a malformed file, keep the rest.
+      }
+    }
+    return merged
+  } catch {
+    return {}
+  }
 }
 
 function groupSessions(
@@ -95,11 +139,17 @@ function SessionRow(props: {
   eventKind?: string
   unread?: boolean
   current?: boolean
+  decoration?: Decoration
   onToggleArchive?: () => void
   localUnread?: boolean
   onToggleUnread?: () => void
 }) {
   const context = props.context
+  const dotColor = () =>
+    props.decoration?.dot?.color ??
+    context.theme.hue?.red?.[200] ??
+    context.theme.text.feedback?.error?.base ??
+    "red"
   const status = createMemo(() => context.data.session.status?.(props.session.id))
   const busy = () => status() === "running" || props.working()[props.session.id] === true
   const retry = () => status() === "retry"
@@ -175,6 +225,16 @@ function SessionRow(props: {
       <text fg={iconColor()} flexShrink={0}>
         {icon()}
       </text>
+      <Show when={props.decoration?.dot}>
+        <text fg={dotColor()} flexShrink={0}>
+          {"●"}
+        </text>
+      </Show>
+      <Show when={props.decoration?.label}>
+        <text fg={context.theme.text.muted} flexShrink={0}>
+          {props.decoration?.label}
+        </text>
+      </Show>
       <text
         fg={titleColor()}
         attributes={active() ? 1 : 0}
@@ -233,6 +293,7 @@ function SessionsByProject(props: {
   toggleArchive: (id: string) => void
   unreadLocal: () => Record<string, boolean>
   toggleUnread: (id: string) => void
+  decorations: () => Record<string, Decoration>
 }) {
   const context = props.context
   const groups = createMemo(() =>
@@ -331,6 +392,7 @@ function SessionsByProject(props: {
                         props.unreadLocal()[session.id] === true
                       }
                       current={session.id === props.sessionID}
+                      decoration={props.decorations()[session.id]}
                       onToggleArchive={() => props.toggleArchive(session.id)}
                       localUnread={props.unreadLocal()[session.id] === true}
                       onToggleUnread={() => props.toggleUnread(session.id)}
@@ -423,6 +485,7 @@ export default Plugin.define({
     const [projects, setProjects] = createSignal<any[]>([])
     const [working, setWorking] = createSignal<Record<string, boolean>>({})
     const [kinds, setKinds] = createSignal<Record<string, string>>({})
+    const [decorations, setDecorations] = createSignal<Record<string, Decoration>>({})
     const setWork = (id: string, on: boolean) =>
       setWorking((prev) => (prev[id] === on ? prev : { ...prev, [id]: on }))
     const setKind = (id: string, kind?: string) =>
@@ -447,6 +510,7 @@ export default Plugin.define({
 
     let refetchTimer: any
     const load = async () => {
+      setDecorations(readDecorations())
       try {
         // Bust the client's cached project list so deletions are picked up.
         try {
@@ -802,6 +866,7 @@ export default Plugin.define({
         toggleArchive={toggleArchive}
         unreadLocal={unreadLocal}
         toggleUnread={toggleUnread}
+        decorations={decorations}
       />
     )
 
