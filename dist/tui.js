@@ -204,6 +204,7 @@ function SessionRow(props) {
     _$insertNode(_el$, _el$8);
     _$setProp(_el$, "flexDirection", "row");
     _$setProp(_el$, "gap", 1);
+    _$setProp(_el$, "paddingRight", 1);
     _$setProp(_el$2, "flexShrink", 0);
     _$insert(_el$2, icon);
     _$insert(_el$, _$createComponent(Show, {
@@ -303,6 +304,7 @@ function SessionsByProject(props) {
     _$insertNode(_el$0, _el$1);
     _$insertNode(_el$0, _el$11);
     _$setProp(_el$0, "flexDirection", "row");
+    _$setProp(_el$0, "paddingRight", 1);
     _$insertNode(_el$1, _$createTextNode(`Jump to session`));
     _$setProp(_el$1, "attributes", 1);
     _$setProp(_el$1, "flexGrow", 1);
@@ -337,6 +339,7 @@ function SessionsByProject(props) {
           _$insertNode(_el$17, _el$21);
           _$setProp(_el$17, "flexDirection", "row");
           _$setProp(_el$17, "gap", 1);
+          _$setProp(_el$17, "paddingRight", 1);
           _$insertNode(_el$18, _el$19);
           _$insertNode(_el$18, _el$20);
           _$setProp(_el$18, "flexDirection", "row");

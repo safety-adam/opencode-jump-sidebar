@@ -221,7 +221,7 @@ function SessionRow(props: {
   }
 
   return (
-    <box flexDirection="row" gap={1} backgroundColor={rowBg()}>
+    <box flexDirection="row" gap={1} paddingRight={1} backgroundColor={rowBg()}>
       <text fg={iconColor()} flexShrink={0}>
         {icon()}
       </text>
@@ -311,7 +311,7 @@ function SessionsByProject(props: {
 
   return (
     <box flexDirection="column" paddingTop={1} gap={1}>
-      <box flexDirection="row">
+      <box flexDirection="row" paddingRight={1}>
         <text
           fg={context.theme.text.base}
           attributes={1}
@@ -346,7 +346,7 @@ function SessionsByProject(props: {
           const isCollapsed = () => props.collapsed()[group.key] === true
           return (
             <box flexDirection="column">
-              <box flexDirection="row" gap={1}>
+              <box flexDirection="row" gap={1} paddingRight={1}>
                 <box
                   flexDirection="row"
                   gap={1}
