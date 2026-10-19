@@ -200,14 +200,8 @@ function SessionRow(props: {
       }
     }
     try {
-      const shells = context.data.shell?.list?.(context.location) ?? []
-      if (
-        Array.isArray(shells) &&
-        shells.some(
-          (sh: any) =>
-            sh?.sessionID === props.session.id && sh?.status === "running",
-        )
-      ) {
+      const shells = context.data.shell?.listBySession?.(props.session.id) ?? []
+      if (Array.isArray(shells) && shells.some((sh: any) => sh?.status === "running")) {
         return true
       }
     } catch {}
@@ -228,7 +222,11 @@ function SessionRow(props: {
     if (activeKind() === "?" || activeKind() === "!")
       return context.theme.hue?.accent?.[200] ?? context.theme.text.feedback?.info?.base
     if (busy()) return context.theme.hue?.orange?.[200] ?? context.theme.text.feedback?.warning?.base
-    if (hasBackground()) return context.theme.hue?.blue?.[200] ?? context.theme.text.muted
+    if (hasBackground()) {
+      if (props.unread) return context.theme.hue?.purple?.[200] ?? context.theme.text.feedback?.info?.base
+      if (retry()) return context.theme.hue?.orange?.[200] ?? context.theme.text.feedback?.warning?.base
+      return context.theme.text.muted
+    }
     if (retry()) return context.theme.hue?.orange?.[200] ?? context.theme.text.feedback?.warning?.base
     if (props.unread) return context.theme.hue?.purple?.[200] ?? context.theme.text.feedback?.info?.base
     return context.theme.text.muted
