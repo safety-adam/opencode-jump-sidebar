@@ -202,6 +202,7 @@ function SessionRow(props) {
     if (activeKind() === "?" || activeKind() === "!") return context.theme.hue?.accent?.[200] ?? context.theme.text.feedback?.info?.base;
     if (busy()) return context.theme.hue?.orange?.[200] ?? context.theme.text.feedback?.warning?.base;
     if (hasBackground()) {
+      if (active()) return activeColor();
       if (props.unread) return context.theme.hue?.purple?.[200] ?? context.theme.text.feedback?.info?.base;
       if (retry()) return context.theme.hue?.orange?.[200] ?? context.theme.text.feedback?.warning?.base;
       return context.theme.text.muted;
@@ -212,10 +213,9 @@ function SessionRow(props) {
   };
   const active = () => props.current === true;
   const rowBg = () => active() ? context.theme.background?.action?.primary?.selected ?? context.theme.background?.action?.primary?.focused ?? context.theme.background?.element : undefined;
+  const activeColor = () => context.theme.text?.action?.primary?.selected ?? context.theme.text?.action?.primary?.focused ?? context.theme.text.base;
   const titleColor = () => {
-    if (active()) {
-      return context.theme.text?.action?.primary?.selected ?? context.theme.text?.action?.primary?.focused ?? context.theme.text.base;
-    }
+    if (active()) return activeColor();
     if (props.unread) {
       return context.theme.hue?.purple?.[200] ?? context.theme.text.feedback?.info?.base;
     }
