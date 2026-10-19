@@ -6,6 +6,8 @@ import { isAbsolute, join } from "node:path"
 
 // Spinner frames used by the TUI for a busy/working session.
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+// Slower, quieter frames for background work (subagents or running shells).
+const BACKGROUND = ["◌", "◎"]
 // Archive convention used by the /archive command.
 const ARCHIVE_PREFIX = "[Archived] "
 
@@ -143,6 +145,7 @@ function SessionRow(props: {
   onToggleArchive?: () => void
   localUnread?: boolean
   onToggleUnread?: () => void
+  childMap?: () => Map<string, any[]>
 }) {
   const context = props.context
   const dotColor = () =>
@@ -184,10 +187,38 @@ function SessionRow(props: {
     return dataKind ?? props.eventKind
   }
 
+  // Subagents (descendant sessions) or running shells mean background work.
+  const hasBackground = createMemo(() => {
+    const map = props.childMap?.()
+    if (map) {
+      const stack = [...(map.get(props.session.id) ?? [])]
+      while (stack.length > 0) {
+        const child = stack.pop()
+        if (context.data.session.status?.(child.id) === "running") return true
+        const kids = map.get(child.id)
+        if (kids) stack.push(...kids)
+      }
+    }
+    try {
+      const shells = context.data.shell?.list?.(context.location) ?? []
+      if (
+        Array.isArray(shells) &&
+        shells.some(
+          (sh: any) =>
+            sh?.sessionID === props.session.id && sh?.status === "running",
+        )
+      ) {
+        return true
+      }
+    } catch {}
+    return false
+  })
+
   const icon = () => {
     if (activeKind() === "!") return "!"
     if (activeKind() === "?") return "?"
     if (busy()) return SPINNER[props.frame() % SPINNER.length]
+    if (hasBackground()) return BACKGROUND[Math.floor(props.frame() / 5) % BACKGROUND.length]
     if (retry()) return "!"
     if (props.unread) return "•"
     return " "
@@ -197,6 +228,7 @@ function SessionRow(props: {
     if (activeKind() === "?" || activeKind() === "!")
       return context.theme.hue?.accent?.[200] ?? context.theme.text.feedback?.info?.base
     if (busy()) return context.theme.hue?.orange?.[200] ?? context.theme.text.feedback?.warning?.base
+    if (hasBackground()) return context.theme.hue?.blue?.[200] ?? context.theme.text.muted
     if (retry()) return context.theme.hue?.orange?.[200] ?? context.theme.text.feedback?.warning?.base
     if (props.unread) return context.theme.hue?.purple?.[200] ?? context.theme.text.feedback?.info?.base
     return context.theme.text.muted
@@ -309,6 +341,17 @@ function SessionsByProject(props: {
     return new Map<string, any>(list.map((t: any) => [t.sessionID, t]))
   })
 
+  const childMap = createMemo(() => {
+    const map = new Map<string, any[]>()
+    for (const s of props.sessions()) {
+      if (!s.parentID) continue
+      const arr = map.get(s.parentID) ?? []
+      arr.push(s)
+      map.set(s.parentID, arr)
+    }
+    return map
+  })
+
   return (
     <box flexDirection="column" paddingTop={1} gap={1}>
       <box flexDirection="row" paddingRight={1}>
@@ -396,6 +439,7 @@ function SessionsByProject(props: {
                       onToggleArchive={() => props.toggleArchive(session.id)}
                       localUnread={props.unreadLocal()[session.id] === true}
                       onToggleUnread={() => props.toggleUnread(session.id)}
+                      childMap={childMap}
                     />
                   )}
                 </For>
