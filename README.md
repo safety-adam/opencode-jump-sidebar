@@ -92,6 +92,14 @@ The session sidebar gets a **Jump to session** section.
 Press `Ctrl+X` then `Z` to archive or unarchive the current session, the same
 title convention as the `/archive` command.
 
+Press `Cmd+[` and `Cmd+]` to move back and forward through the sessions you have
+opened, browser style. OpenCode declares `session.tab.history.back` and
+`session.tab.history.forward` but ships no command behind either one, so this
+plugin supplies them. The history lives in memory and starts empty each run.
+
+On macOS with Ghostty, unbind the terminal's own split keys first. Add
+`keybind = super+[=unbind` and `keybind = super+]=unbind` to the Ghostty config.
+
 ## Session decorations
 
 Other TUI plugins can annotate session rows without importing anything from this

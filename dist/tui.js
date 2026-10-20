@@ -7,7 +7,7 @@ import { insert as _$insert } from "@opentui/solid";
 import { setProp as _$setProp } from "@opentui/solid";
 import { createElement as _$createElement } from "@opentui/solid";
 import { Plugin } from "@opencode/plugin/tui";
-import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js";
 import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
@@ -38,6 +38,18 @@ function defaultTitle(session) {
 }
 function displayTitle(session) {
   return session?.title || defaultTitle(session);
+}
+
+// Watches the route and reports each session visit so the plugin can keep a
+// browser style history stack. It renders nothing.
+function SessionHistoryTracker(props) {
+  createEffect(on(() => {
+    const route = props.context.ui.router.current();
+    return route?.type === "session" ? route.sessionID : undefined;
+  }, sessionID => {
+    if (sessionID) props.onVisit(sessionID);
+  }));
+  return null;
 }
 function isArchived(session) {
   if (typeof session?.title === "string" && session.title.startsWith(ARCHIVE_PREFIX)) return true;
@@ -842,6 +854,59 @@ export default Plugin.define({
       });
     }
 
+    // Session navigation history for the history keybinds. OpenCode declares
+    // session.tab.history.back and session.tab.history.forward but ships no command
+    // behind either one, so the plugin supplies them. The stack is in memory and
+    // browser style, with a cursor that new visits truncate.
+    const HISTORY_LIMIT = 100;
+    let historyEntries = [];
+    let historyIndex = -1;
+    const historyRoot = sessionID => {
+      try {
+        return context.data.session?.root?.(sessionID) ?? sessionID;
+      } catch {
+        return sessionID;
+      }
+    };
+    const historyRecord = sessionID => {
+      if (historyEntries[historyIndex] === sessionID) return;
+      const entries = [...historyEntries.slice(0, historyIndex + 1), sessionID].slice(-HISTORY_LIMIT);
+      historyEntries = entries;
+      historyIndex = entries.length - 1;
+    };
+    const historyMove = direction => {
+      const route = context.ui.router.current();
+      const active = route?.type === "session" ? historyRoot(route.sessionID) : undefined;
+      let open;
+      try {
+        if (context.ui.tabs?.enabled?.()) {
+          open = new Set((context.ui.tabs.list?.() ?? []).map(tab => tab.sessionID));
+        }
+      } catch {}
+      const candidates = direction === -1 ? historyEntries.slice(0, historyIndex).map((id, index) => ({
+        id,
+        index
+      })).reverse() : historyEntries.slice(historyIndex + 1).map((id, index) => ({
+        id,
+        index: historyIndex + 1 + index
+      }));
+      const target = candidates.find(entry => entry.id !== active && (!open || open.has(entry.id)));
+      if (!target) return undefined;
+      historyIndex = target.index;
+      return target.id;
+    };
+    const historyGo = direction => {
+      const sessionID = historyMove(direction);
+      if (!sessionID) return;
+      try {
+        if (context.ui.tabs?.focus?.(sessionID)) return;
+      } catch {}
+      context.ui.router.navigate({
+        type: "session",
+        sessionID
+      });
+    };
+
     // Archive/unarchive the current session using the same title convention as /archive.
     // Keymap layers must be registered from a rendered slot (as the built-ins do).
     context.ui.slot({
@@ -892,6 +957,20 @@ export default Plugin.define({
                   } catch {}
                 }
               }
+            }, {
+              id: "session.tab.history.back",
+              title: "Back in session history",
+              group: "Session",
+              palette: false,
+              bind: "super+[",
+              run: () => historyGo(-1)
+            }, {
+              id: "session.tab.history.forward",
+              title: "Forward in session history",
+              group: "Session",
+              palette: false,
+              bind: "super+]",
+              run: () => historyGo(1)
             }],
             bindings: ["session.archive.toggle", "project.new"]
           }));
@@ -938,6 +1017,13 @@ export default Plugin.define({
         get children() {
           return sessionsPanel(undefined);
         }
+      })
+    });
+    context.ui.slot({
+      append: "app",
+      render: () => _$createComponent(SessionHistoryTracker, {
+        context: context,
+        onVisit: sessionID => historyRecord(historyRoot(sessionID))
       })
     });
     return () => {
