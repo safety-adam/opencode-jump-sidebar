@@ -662,6 +662,7 @@ export default Plugin.define({
     void load()
     // Safety net: keep titles/order fresh even if an event is missed.
     const poll = setInterval(() => void load(), 3000)
+
     const offs = [
       on("session.created", schedule),
       on("session.updated", schedule),
@@ -1014,6 +1015,13 @@ export default Plugin.define({
     context.ui.slot({
       replace: "sidebar.content",
       render: (input: any) => sessionsPanel(input?.sessionID),
+    })
+
+    // The built-in sidebar footer repeats the working directory. Keep it in the
+    // prompt footer at the bottom left and out of the sidebar.
+    context.ui.slot({
+      replace: "sidebar.footer",
+      render: () => null,
     })
 
     // MCP status in the prompt footer, since the sidebar no longer shows it.

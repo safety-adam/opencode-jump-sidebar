@@ -1013,6 +1013,13 @@ export default Plugin.define({
       render: input => sessionsPanel(input?.sessionID)
     });
 
+    // The built-in sidebar footer repeats the working directory. Keep it in the
+    // prompt footer at the bottom left and out of the sidebar.
+    context.ui.slot({
+      replace: "sidebar.footer",
+      render: () => null
+    });
+
     // MCP status in the prompt footer, since the sidebar no longer shows it.
     context.ui.slot({
       append: "prompt.footer.status",
