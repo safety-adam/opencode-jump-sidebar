@@ -904,11 +904,15 @@ export default Plugin.define({
 
     // Archive/unarchive the current session using the same title convention as /archive.
     // Keymap layers must be registered from a rendered slot (as the built-ins do).
-    context.ui.slot({
-      append: "app",
-      render: () => {
-        try {
-          context.keymap?.layer?.(() => ({
+    // The keymap provider can mount after a hot reload, so retry briefly instead of
+    // giving up and leaving the palette without our commands.
+    let keymapRegistered = false
+    let keymapTimer: ReturnType<typeof setTimeout> | undefined
+    const registerKeymap = (attempt = 0) => {
+      if (keymapRegistered) return
+      try {
+        if (!context.keymap?.layer) throw new Error("keymap unavailable")
+        context.keymap.layer(() => ({
             mode: "global",
             priority: 10,
             commands: [
@@ -971,10 +975,17 @@ export default Plugin.define({
               },
             ],
             bindings: ["session.archive.toggle", "project.new"],
-          }))
-        } catch {
-          // keymap unavailable — the palette command simply won't register
-        }
+        }))
+        keymapRegistered = true
+      } catch {
+        if (attempt < 20) keymapTimer = setTimeout(() => registerKeymap(attempt + 1), 250)
+      }
+    }
+
+    context.ui.slot({
+      append: "app",
+      render: () => {
+        registerKeymap()
         return null
       },
     })
@@ -1027,6 +1038,7 @@ export default Plugin.define({
     })
 
     return () => {
+      if (keymapTimer) clearTimeout(keymapTimer)
       clearTimeout(refetchTimer)
       clearInterval(poll)
       offs.forEach((off) => off())
