@@ -597,14 +597,17 @@ export default Plugin.define({
           : storeProjects
         if (projects.length) setProjects(projects)
 
+        // Do not pass `archived` here. OpenCode treats it strictly as a filter
+        // (true = only archived, false = only live), so either value hides half
+        // the sessions. Omitting it returns every session, archived included.
         const requests: Promise<any>[] = [
           context.client.session
-            .list({ limit: 1000, archived: true })
+            .list({ limit: 1000 })
             .then(unwrap)
             .catch(() => [] as any[]),
           ...projects.map((project: any) =>
             context.client.session
-              .list({ directory: projectDir(project), limit: 1000, archived: true })
+              .list({ directory: projectDir(project), limit: 1000 })
               .then(unwrap)
               .catch(() => [] as any[]),
           ),
