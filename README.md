@@ -2,16 +2,17 @@
 
 <img width="417" height="340" alt="image" src="https://github.com/user-attachments/assets/e2d2b312-6e48-42b4-a3c1-70db3077b694" />
 
-An OpenCode plugin that adds a session sidebar grouped by project, plus two
-commands to create and delete projects.
+An OpenCode plugin that adds a session sidebar grouped by project, plus
+commands to create and delete projects and to archive sessions.
 
 The sidebar is a **Jump to session** section. Each project is a collapsible
 group, sessions sort by last updated, and each row carries a status icon. A `+`
 next to a project starts a new session in it.
 
 The commands are `/new-project` to create a project, a folder with a starter
-session, and `/delete-project <name>` to delete the named project when it has no
-sessions.
+session, `/delete-project <name>` to delete the named project when it has no
+sessions, and `/archive [session]` to archive a session by title, the current
+session by default.
 
 The package ships a **server plugin** for the commands, available in every
 client, and a **CLI/TUI entry** for the sidebar.
@@ -122,6 +123,7 @@ the session that is recording.
 
 - `/new-project <name>` creates `<root>/<name>`, or an explicit path starting with `/` or `~`, and leaves a starter session in it.
 - `/delete-project <name>` deletes the single project matching `<name>`, its name or folder, when that project has no sessions, then restarts the service so the removal sticks. It never deletes a project that has sessions, and it asks which project to delete when no name is supplied.
+- `/archive [session]` prepends `[Archived] ` to a session title, the current session by default, or the session matching an ID or part of a title.
 
 ## Development
 

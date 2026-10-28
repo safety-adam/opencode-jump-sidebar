@@ -11,13 +11,12 @@ import { For, Show, createEffect, createMemo, createSignal, on, onCleanup } from
 import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { isArchivedTitle, toArchivedTitle, toUnarchivedTitle } from "./archive.js";
 
 // Spinner frames used by the TUI for a busy/working session.
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 // Slower, quieter frames for background work (subagents or running shells).
 const BACKGROUND = ["◌", "◎"];
-// Archive convention used by the /archive command.
-const ARCHIVE_PREFIX = "[Archived] ";
 function basename(p) {
   if (!p) return "";
   const parts = p.replace(/[/\\]+$/, "").split(/[/\\]/);
@@ -52,7 +51,7 @@ function SessionHistoryTracker(props) {
   return null;
 }
 function isArchived(session) {
-  if (typeof session?.title === "string" && session.title.startsWith(ARCHIVE_PREFIX)) return true;
+  if (isArchivedTitle(session?.title)) return true;
   return session?.time?.archived != null;
 }
 function unwrap(result) {
@@ -796,8 +795,8 @@ export default Plugin.define({
     const toggleArchive = async sessionID => {
       const session = sessions().find(s => s.id === sessionID) ?? context.data.session.get?.(sessionID);
       const title = session?.title ?? "";
-      const archived = title.startsWith(ARCHIVE_PREFIX);
-      const next = archived ? title.slice(ARCHIVE_PREFIX.length) : ARCHIVE_PREFIX + title;
+      const archived = isArchivedTitle(title);
+      const next = archived ? toUnarchivedTitle(title) : toArchivedTitle(title);
       try {
         await context.client.session.update({
           sessionID,

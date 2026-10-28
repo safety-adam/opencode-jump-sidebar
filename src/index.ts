@@ -1,4 +1,5 @@
 import { Plugin } from "@opencode/plugin"
+import { ARCHIVE_PREFIX } from "./archive.ts"
 
 /**
  * Default directory new projects are created under. Override with the plugin
@@ -47,6 +48,19 @@ Say "deleted", never "removed from the database". Do not mention the database, b
 Target: ${target || "(none supplied — ask the user which project to delete)"}`
 }
 
+function archiveInstructions(args: string): string {
+  const target = args.trim()
+  return `Archive a session by prepending "${ARCHIVE_PREFIX}" to its title.
+
+1. Run \`opencode session list\` to get session IDs and titles.
+2. Find the target session. For the current session, use the most recently updated one that matches this conversation, or ask me to confirm if it is ambiguous. If a target is supplied, match it against the ID or title.
+3. If the title already starts with "${ARCHIVE_PREFIX}", say it is already archived and stop.
+4. Call the \`set_session_title\` tool with the session's ID, or "self" if it is the current session, and the title "${ARCHIVE_PREFIX}" followed by the existing title.
+5. Confirm in one line, referring to the action as archiving. Say "Archived <title>", never "renamed" or "prepended".
+
+Target: ${target || "(none supplied, use the current session)"}`
+}
+
 export default Plugin.define({
   id: "opencode.jump-sidebar",
   async setup(ctx) {
@@ -72,6 +86,17 @@ export default Plugin.define({
             sessionID,
             delivery,
             text: deleteProjectInstructions(prompt.text ?? ""),
+          }),
+      })
+
+      editor.add({
+        name: "archive",
+        description: "Archive a session. Defaults to the current session",
+        execute: ({ sessionID, prompt, delivery }) =>
+          ctx.session.prompt({
+            sessionID,
+            delivery,
+            text: archiveInstructions(prompt.text ?? ""),
           }),
       })
     })

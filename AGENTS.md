@@ -8,7 +8,8 @@ An OpenCode plugin with two halves that ship together.
 
 | File | Half | Loaded by |
 | --- | --- | --- |
-| `src/index.ts` | Server (the `/new-project` and `/delete-project` commands) | the OpenCode server |
+| `src/index.ts` | Server (the `/new-project`, `/delete-project` and `/archive` commands) | the OpenCode server |
+| `src/archive.ts` | Shared archive title convention, imported by both halves | both |
 | `src/tui.tsx` | CLI/TUI (the "Jump to session" sidebar) | the OpenCode terminal client |
 
 `src/tui.tsx` contains JSX and must be compiled before it is published. The

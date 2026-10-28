@@ -26,7 +26,10 @@ import { fileURLToPath } from "node:url"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 
-const targets = [{ input: "src/tui.tsx", output: "dist/tui.js" }]
+const targets = [
+  { input: "src/tui.tsx", output: "dist/tui.js" },
+  { input: "src/archive.ts", output: "dist/archive.js" },
+]
 
 for (const { input, output } of targets) {
   const result = await transformFileAsync(resolve(root, input), {
@@ -43,8 +46,11 @@ for (const { input, output } of targets) {
 
   if (!result?.code) throw new Error(`Babel produced no output for ${input}`)
 
+  // `dist` is plain JavaScript, so sibling imports must not carry a `.ts` extension.
+  const code = result.code.replaceAll('"./archive.ts"', '"./archive.js"')
+
   const out = resolve(root, output)
   await mkdir(dirname(out), { recursive: true })
-  await writeFile(out, result.code + "\n")
+  await writeFile(out, code + "\n")
   console.log(`${input} -> ${output}`)
 }

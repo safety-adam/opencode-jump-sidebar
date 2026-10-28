@@ -1,7 +1,7 @@
 {
   "name": "opencode-jump-sidebar",
   "version": "1.0.0",
-  "description": "OpenCode plugin: a \"Jump to session\" sidebar grouped by project, plus new-project and delete-project commands.",
+  "description": "OpenCode plugin: a \"Jump to session\" sidebar grouped by project, plus new-project, delete-project and archive commands.",
   "type": "module",
   "license": "MIT",
   "exports": {
