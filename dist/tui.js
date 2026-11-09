@@ -1,16 +1,17 @@
 import { memo as _$memo } from "@opentui/solid";
-import { createComponent as _$createComponent } from "@opentui/solid";
 import { effect as _$effect } from "@opentui/solid";
+import { createComponent as _$createComponent } from "@opentui/solid";
+import { insert as _$insert } from "@opentui/solid";
 import { createTextNode as _$createTextNode } from "@opentui/solid";
 import { insertNode as _$insertNode } from "@opentui/solid";
-import { insert as _$insert } from "@opentui/solid";
 import { setProp as _$setProp } from "@opentui/solid";
 import { createElement as _$createElement } from "@opentui/solid";
 import { Plugin } from "@opencode/plugin/tui";
 import { For, Show, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js";
-import { mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, appendFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { execSync } from "node:child_process";
 import { isArchivedTitle, toArchivedTitle, toUnarchivedTitle } from "./archive.js";
 
 // Spinner frames used by the TUI for a busy/working session.
@@ -74,6 +75,20 @@ function unwrap(result) {
 //                  "label": "REC"
 //              } } }
 
+function sidebarDir() {
+  return process.env.OPENCODE_SIDEBAR_DIR || join(homedir(), ".local", "share", "opencode", "sidebar");
+}
+
+// Temporary tracing for the todo panel. Remove once the panel is confirmed.
+function trace(message) {
+  try {
+    const base = sidebarDir();
+    mkdirSync(base, {
+      recursive: true
+    });
+    appendFileSync(join(base, "todos-debug.log"), `${new Date().toISOString()} ${message}\n`);
+  } catch {}
+}
 function readDecorations() {
   try {
     const base = process.env.OPENCODE_SIDEBAR_DIR || join(homedir(), ".local", "share", "opencode", "sidebar");
@@ -101,13 +116,217 @@ function readDecorations() {
     return {};
   }
 }
+
+// Todos come from the latest todowrite tool part in the session messages. The
+// tool input holds the whole list, so the last call wins and an empty list
+// clears the panel.
+// Returns null when the transcript holds no todowrite call at all, so an empty
+// array always means the agent cleared the list.
+function todosFromMessages(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const content = messages[i]?.content;
+    if (!Array.isArray(content)) continue;
+    for (let j = content.length - 1; j >= 0; j--) {
+      const part = content[j];
+      if (part?.type !== "tool" || part?.name !== "todowrite") continue;
+      const todos = part.state?.input?.todos ?? part.state?.metadata?.todos;
+      if (Array.isArray(todos)) return todos;
+    }
+  }
+  return null;
+}
+function readTodos(context, sessionID) {
+  if (!sessionID) return null;
+  try {
+    return todosFromMessages(context.data.session.message.list?.(sessionID) ?? []);
+  } catch {
+    return null;
+  }
+}
+const TODO_ICON = {
+  pending: "[ ]",
+  in_progress: "[•]",
+  completed: "[✓]",
+  cancelled: "[-]"
+};
+function TodoPanel(props) {
+  const context = props.context;
+  const [todos, setTodos] = createSignal([]);
+  let ticket = 0;
+  let fetchedAt = 0;
+
+  // The sidebar tells us the open session. On the home screen it does not, so
+  // fall back to the route.
+  const session = () => {
+    if (props.sessionID) return props.sessionID;
+    const route = context.ui.router.current?.();
+    return route?.type === "session" ? route.sessionID : undefined;
+  };
+  let shown;
+  const load = sessionID => {
+    const current = ++ticket;
+    if (sessionID !== shown) {
+      shown = sessionID;
+      setTodos([]);
+    }
+    if (!sessionID) return;
+    // The client store empties and refills while a session streams, so only a
+    // real todowrite call may change what is on screen.
+    const cached = readTodos(context, sessionID);
+    if (cached) {
+      if (cached.length) trace(`panel ${sessionID} store=${cached.length}`);
+      setTodos(cached);
+      return;
+    }
+    if (Date.now() - fetchedAt < 30_000) return;
+    fetchedAt = Date.now();
+    try {
+      void context.client.message.list({
+        sessionID,
+        limit: 200,
+        order: "desc"
+      }).then(res => {
+        if (current !== ticket) return;
+        const page = unwrap(res) ?? res?.data ?? [];
+        const found = todosFromMessages([...page].reverse());
+        trace(`panel ${sessionID} api page=${page.length} found=${found?.length ?? "none"}`);
+        if (found) setTodos(found);
+      }).catch(err => {
+        trace(`panel ${sessionID} api error ${err?.message ?? err}`);
+      });
+    } catch (err) {
+      trace(`panel ${sessionID} api threw ${err?.message ?? err}`);
+    }
+  };
+  createEffect(on(() => [session(), props.revision()], ([sessionID]) => load(sessionID)));
+  const writeClipboard = text => {
+    if (process.platform === "darwin") {
+      execSync("pbcopy", {
+        input: text
+      });
+      return;
+    }
+    // Other platforms go through the terminal's OSC 52 support.
+    context.renderer?.copyToClipboardOSC52?.(text);
+  };
+
+  // Clicking an item drafts the prompt for it into the composer without sending.
+  // The TUI gives plugins no way to write the composer, so the text goes through
+  // the clipboard and the built-in paste command, then the clipboard is restored.
+  const draft = content => {
+    const text = `Start "${content}" and mark it in progress.`;
+    let previous;
+    try {
+      if (process.platform === "darwin") previous = execSync("pbpaste", {
+        encoding: "utf8"
+      });
+      writeClipboard(text);
+      context.keymap?.dispatch("prompt.paste");
+      trace(`draft ${content.slice(0, 40)}`);
+    } catch (err) {
+      trace(`draft error ${err?.message ?? err}`);
+      context.ui?.toast?.show({
+        message: "Could not draft the todo prompt",
+        variant: "error"
+      });
+      return;
+    }
+    if (previous === undefined) return;
+    setTimeout(() => {
+      try {
+        execSync("pbcopy", {
+          input: previous
+        });
+      } catch {}
+    }, 400);
+  };
+  const done = () => todos().filter(t => t.status === "completed").length;
+  const color = status => {
+    if (status === "in_progress") return context.theme.hue?.orange?.[200] ?? context.theme.text.feedback?.warning?.base;
+    if (status === "cancelled" || status === "completed") return context.theme.text.faint;
+    return context.theme.text.muted;
+  };
+  return _$createComponent(Show, {
+    get when() {
+      return todos().length > 0;
+    },
+    get children() {
+      var _el$ = _$createElement("box"),
+        _el$2 = _$createElement("box"),
+        _el$3 = _$createElement("text"),
+        _el$5 = _$createElement("text");
+      _$insertNode(_el$, _el$2);
+      _$setProp(_el$, "flexDirection", "column");
+      _$setProp(_el$, "gap", 0);
+      _$setProp(_el$, "paddingRight", 1);
+      _$insertNode(_el$2, _el$3);
+      _$insertNode(_el$2, _el$5);
+      _$setProp(_el$2, "flexDirection", "row");
+      _$setProp(_el$2, "gap", 1);
+      _$insertNode(_el$3, _$createTextNode(`Todos`));
+      _$setProp(_el$3, "attributes", 1);
+      _$insert(_el$5, () => `${done()}/${todos().length}`);
+      _$insert(_el$, _$createComponent(For, {
+        get each() {
+          return todos();
+        },
+        children: todo => (() => {
+          var _el$6 = _$createElement("box"),
+            _el$7 = _$createElement("text"),
+            _el$8 = _$createElement("text");
+          _$insertNode(_el$6, _el$7);
+          _$insertNode(_el$6, _el$8);
+          _$setProp(_el$6, "flexDirection", "row");
+          _$setProp(_el$6, "gap", 1);
+          _$setProp(_el$7, "flexShrink", 0);
+          _$insert(_el$7, () => TODO_ICON[todo.status] ?? "[ ]");
+          _$setProp(_el$8, "wrapMode", "word");
+          _$setProp(_el$8, "flexGrow", 1);
+          _$setProp(_el$8, "minWidth", 0);
+          _$setProp(_el$8, "onMouseUp", () => {
+            if (todo.status === "completed" || todo.status === "cancelled") return;
+            draft(todo.content);
+          });
+          _$insert(_el$8, () => todo.content);
+          _$effect(_p$ => {
+            var _v$3 = color(todo.status),
+              _v$4 = color(todo.status),
+              _v$5 = todo.status === "cancelled" ? 128 : 0;
+            _v$3 !== _p$.e && (_p$.e = _$setProp(_el$7, "fg", _v$3, _p$.e));
+            _v$4 !== _p$.t && (_p$.t = _$setProp(_el$8, "fg", _v$4, _p$.t));
+            _v$5 !== _p$.a && (_p$.a = _$setProp(_el$8, "attributes", _v$5, _p$.a));
+            return _p$;
+          }, {
+            e: undefined,
+            t: undefined,
+            a: undefined
+          });
+          return _el$6;
+        })()
+      }), null);
+      _$effect(_p$ => {
+        var _v$ = context.theme.text.base,
+          _v$2 = context.theme.text.faint;
+        _v$ !== _p$.e && (_p$.e = _$setProp(_el$3, "fg", _v$, _p$.e));
+        _v$2 !== _p$.t && (_p$.t = _$setProp(_el$5, "fg", _v$2, _p$.t));
+        return _p$;
+      }, {
+        e: undefined,
+        t: undefined
+      });
+      return _el$;
+    }
+  });
+}
 function groupSessions(sessions, projects, showArchived) {
   const byId = new Map(projects.map(p => [p.id, p]));
+  const archivedProjects = new Set(projects.filter(p => isArchivedTitle(p.name)).map(p => p.id));
   const groups = new Map();
   // Seed a group for every project, even if it has no sessions.
   for (const p of projects) {
     const dir = projectDir(p);
     if (!dir || dir === "/") continue; // skip the filesystem-root pseudo-project
+    if (!showArchived && archivedProjects.has(p.id)) continue;
     const label = p.name || basename(dir) || dir;
     groups.set(p.id, {
       key: p.id,
@@ -119,6 +338,7 @@ function groupSessions(sessions, projects, showArchived) {
   for (const s of sessions) {
     if (s.parentID) continue; // root sessions only
     if (!showArchived && isArchived(s)) continue;
+    if (!showArchived && s.projectID && archivedProjects.has(s.projectID)) continue;
     const dir = s.location?.directory ?? s.directory;
     const project = byId.get(s.projectID);
     const label = project?.name || basename(projectDir(project)) || basename(dir) || `Project ${String(s.projectID ?? "unknown").slice(0, 8)}`;
@@ -205,7 +425,7 @@ function SessionRow(props) {
     if (busy()) return SPINNER[props.frame() % SPINNER.length];
     if (hasBackground()) return BACKGROUND[Math.floor(props.frame() / 5) % BACKGROUND.length];
     if (retry()) return "!";
-    if (props.unread) return "•";
+    if (props.unread) return "●";
     return " ";
   };
   // Colours match the TUI: attention (! / ?) = hue.accent[200], working = hue.orange[200].
@@ -233,81 +453,81 @@ function SessionRow(props) {
     return context.theme.text.muted;
   };
   return (() => {
-    var _el$ = _$createElement("box"),
-      _el$2 = _$createElement("text"),
-      _el$6 = _$createElement("text"),
-      _el$7 = _$createElement("text"),
-      _el$8 = _$createElement("text");
-    _$insertNode(_el$, _el$2);
-    _$insertNode(_el$, _el$6);
-    _$insertNode(_el$, _el$7);
-    _$insertNode(_el$, _el$8);
-    _$setProp(_el$, "flexDirection", "row");
-    _$setProp(_el$, "gap", 1);
-    _$setProp(_el$, "paddingRight", 1);
-    _$setProp(_el$2, "flexShrink", 0);
-    _$insert(_el$2, icon);
-    _$insert(_el$, _$createComponent(Show, {
+    var _el$9 = _$createElement("box"),
+      _el$0 = _$createElement("text"),
+      _el$12 = _$createElement("text"),
+      _el$13 = _$createElement("text"),
+      _el$14 = _$createElement("text");
+    _$insertNode(_el$9, _el$0);
+    _$insertNode(_el$9, _el$12);
+    _$insertNode(_el$9, _el$13);
+    _$insertNode(_el$9, _el$14);
+    _$setProp(_el$9, "flexDirection", "row");
+    _$setProp(_el$9, "gap", 1);
+    _$setProp(_el$9, "paddingRight", 1);
+    _$setProp(_el$0, "flexShrink", 0);
+    _$insert(_el$0, icon);
+    _$insert(_el$9, _$createComponent(Show, {
       get when() {
         return props.decoration?.dot;
       },
       get children() {
-        var _el$3 = _$createElement("text");
-        _$insertNode(_el$3, _$createTextNode(`●`));
-        _$setProp(_el$3, "flexShrink", 0);
-        _$effect(_$p => _$setProp(_el$3, "fg", dotColor(), _$p));
-        return _el$3;
+        var _el$1 = _$createElement("text");
+        _$insertNode(_el$1, _$createTextNode(`●`));
+        _$setProp(_el$1, "flexShrink", 0);
+        _$effect(_$p => _$setProp(_el$1, "fg", dotColor(), _$p));
+        return _el$1;
       }
-    }), _el$6);
-    _$insert(_el$, _$createComponent(Show, {
+    }), _el$12);
+    _$insert(_el$9, _$createComponent(Show, {
       get when() {
         return props.decoration?.label;
       },
       get children() {
-        var _el$5 = _$createElement("text");
-        _$setProp(_el$5, "flexShrink", 0);
-        _$insert(_el$5, () => props.decoration?.label);
-        _$effect(_$p => _$setProp(_el$5, "fg", context.theme.text.muted, _$p));
-        return _el$5;
+        var _el$11 = _$createElement("text");
+        _$setProp(_el$11, "flexShrink", 0);
+        _$insert(_el$11, () => props.decoration?.label);
+        _$effect(_$p => _$setProp(_el$11, "fg", context.theme.text.muted, _$p));
+        return _el$11;
       }
-    }), _el$6);
-    _$setProp(_el$6, "wrapMode", "none");
-    _$setProp(_el$6, "truncate", true);
-    _$setProp(_el$6, "flexGrow", 1);
-    _$setProp(_el$6, "minWidth", 0);
-    _$setProp(_el$6, "onMouseUp", () => {
+    }), _el$12);
+    _$setProp(_el$12, "wrapMode", "none");
+    _$setProp(_el$12, "truncate", true);
+    _$setProp(_el$12, "flexGrow", 1);
+    _$setProp(_el$12, "minWidth", 0);
+    _$setProp(_el$12, "onMouseUp", () => {
       if (props.localUnread) props.onToggleUnread?.();
       context.ui.router.navigate({
         type: "session",
         sessionID: props.session.id
       });
     });
-    _$insert(_el$6, () => displayTitle(props.session));
-    _$setProp(_el$7, "flexShrink", 0);
-    _$setProp(_el$7, "onMouseUp", e => {
+    _$insert(_el$12, () => displayTitle(props.session));
+    _$setProp(_el$13, "flexShrink", 0);
+    _$setProp(_el$13, "onMouseUp", e => {
       e?.stopPropagation?.();
       props.onToggleUnread?.();
     });
-    _$insert(_el$7, () => props.localUnread ? "•" : "·");
-    _$setProp(_el$8, "flexShrink", 0);
-    _$setProp(_el$8, "onMouseUp", e => {
+    _$insert(_el$13, () => props.localUnread ? "●" : "·");
+    _$setProp(_el$14, "flexShrink", 0);
+    _$setProp(_el$14, "onMouseUp", e => {
       e?.stopPropagation?.();
       props.onToggleArchive?.();
     });
-    _$insert(_el$8, () => isArchived(props.session) ? "⇡" : "⇣");
+    _$insert(_el$14, () => isArchived(props.session) ? "⇡" : "⇣");
     _$effect(_p$ => {
-      var _v$ = rowBg(),
-        _v$2 = iconColor(),
-        _v$3 = titleColor(),
-        _v$4 = active() ? 1 : 0,
-        _v$5 = props.localUnread ? context.theme.hue?.purple?.[200] ?? context.theme.text.base : context.theme.text.muted,
-        _v$6 = context.theme.text.muted;
-      _v$ !== _p$.e && (_p$.e = _$setProp(_el$, "backgroundColor", _v$, _p$.e));
-      _v$2 !== _p$.t && (_p$.t = _$setProp(_el$2, "fg", _v$2, _p$.t));
-      _v$3 !== _p$.a && (_p$.a = _$setProp(_el$6, "fg", _v$3, _p$.a));
-      _v$4 !== _p$.o && (_p$.o = _$setProp(_el$6, "attributes", _v$4, _p$.o));
-      _v$5 !== _p$.i && (_p$.i = _$setProp(_el$7, "fg", _v$5, _p$.i));
-      _v$6 !== _p$.n && (_p$.n = _$setProp(_el$8, "fg", _v$6, _p$.n));
+      var _v$6 = rowBg(),
+        _v$7 = iconColor(),
+        _v$8 = titleColor(),
+        _v$9 = active() ? 1 : 0,
+        _v$0 = props.localUnread ? context.theme.hue?.purple?.[200] ?? context.theme.text.base : context.theme.text.muted,
+        _v$1 = context.theme.text.muted;
+      _v$6 !== _p$.e && (_p$.e = _$setProp(_el$9, "backgroundColor", _v$6, _p$.e));
+      _v$7 !== _p$.t && (_p$.t = _$setProp(_el$0, "fg", _v$7, _p$.t));
+      _v$8 !== _p$.a && (_p$.a = _$setProp(_el$12, "fg", _v$8, _p$.a));
+      _v$9 !== _p$.o && (_p$.o = _$setProp(_el$12, "attributes", _v$9, _p$.o));
+      _v$0 !== _p$.i && (_p$.i = _$setProp(_el$13, "fg", _v$0, _p$.i));
+      _v$1 !== _p$.n && (_p$.n = _$setProp(_el$14, "fg", _v$1, _p$.n));
       return _p$;
     }, {
       e: undefined,
@@ -317,7 +537,7 @@ function SessionRow(props) {
       i: undefined,
       n: undefined
     });
-    return _el$;
+    return _el$9;
   })();
 }
 function SessionsByProject(props) {
@@ -341,76 +561,101 @@ function SessionsByProject(props) {
     return map;
   });
   return (() => {
-    var _el$9 = _$createElement("box"),
-      _el$0 = _$createElement("box"),
-      _el$1 = _$createElement("text"),
-      _el$11 = _$createElement("box"),
-      _el$12 = _$createElement("text"),
-      _el$14 = _$createElement("text");
-    _$insertNode(_el$9, _el$0);
-    _$setProp(_el$9, "flexDirection", "column");
-    _$setProp(_el$9, "paddingTop", 1);
-    _$setProp(_el$9, "gap", 1);
-    _$insertNode(_el$0, _el$1);
-    _$insertNode(_el$0, _el$11);
-    _$setProp(_el$0, "flexDirection", "row");
-    _$setProp(_el$0, "paddingRight", 1);
-    _$insertNode(_el$1, _$createTextNode(`Jump to session`));
-    _$setProp(_el$1, "attributes", 1);
-    _$setProp(_el$1, "flexGrow", 1);
-    _$setProp(_el$1, "minWidth", 0);
-    _$setProp(_el$1, "wrapMode", "none");
-    _$setProp(_el$1, "truncate", true);
-    _$insertNode(_el$11, _el$12);
-    _$insertNode(_el$11, _el$14);
-    _$setProp(_el$11, "flexDirection", "row");
-    _$setProp(_el$11, "gap", 1);
-    _$setProp(_el$11, "flexShrink", 0);
-    _$insertNode(_el$12, _$createTextNode(`≡`));
-    _$setProp(_el$12, "onMouseUp", () => props.toggleArchived());
-    _$insertNode(_el$14, _$createTextNode(`+`));
-    _$setProp(_el$14, "onMouseUp", () => props.newProject());
-    _$insert(_el$9, _$createComponent(For, {
+    var _el$15 = _$createElement("box"),
+      _el$16 = _$createElement("box"),
+      _el$17 = _$createElement("text"),
+      _el$19 = _$createElement("box"),
+      _el$20 = _$createElement("text"),
+      _el$22 = _$createElement("text");
+    _$insertNode(_el$15, _el$16);
+    _$setProp(_el$15, "flexDirection", "column");
+    _$setProp(_el$15, "paddingTop", 1);
+    _$setProp(_el$15, "gap", 1);
+    _$insert(_el$15, _$createComponent(TodoPanel, {
+      context: context,
+      get sessionID() {
+        return props.sessionID;
+      },
+      get revision() {
+        return props.revision;
+      }
+    }), _el$16);
+    _$insertNode(_el$16, _el$17);
+    _$insertNode(_el$16, _el$19);
+    _$setProp(_el$16, "flexDirection", "row");
+    _$setProp(_el$16, "paddingRight", 1);
+    _$insertNode(_el$17, _$createTextNode(`Jump to session`));
+    _$setProp(_el$17, "attributes", 1);
+    _$setProp(_el$17, "flexGrow", 1);
+    _$setProp(_el$17, "minWidth", 0);
+    _$setProp(_el$17, "wrapMode", "none");
+    _$setProp(_el$17, "truncate", true);
+    _$insertNode(_el$19, _el$20);
+    _$insertNode(_el$19, _el$22);
+    _$setProp(_el$19, "flexDirection", "row");
+    _$setProp(_el$19, "gap", 1);
+    _$setProp(_el$19, "flexShrink", 0);
+    _$insertNode(_el$20, _$createTextNode(`≡`));
+    _$setProp(_el$20, "onMouseUp", () => props.toggleArchived());
+    _$insertNode(_el$22, _$createTextNode(`+`));
+    _$setProp(_el$22, "onMouseUp", () => props.newProject());
+    _$insert(_el$15, _$createComponent(For, {
       get each() {
         return groups();
       },
       children: group => {
         const isCollapsed = () => props.collapsed()[group.key] === true;
         return (() => {
-          var _el$16 = _$createElement("box"),
-            _el$17 = _$createElement("box"),
-            _el$18 = _$createElement("box"),
-            _el$19 = _$createElement("text"),
-            _el$20 = _$createElement("text"),
-            _el$21 = _$createElement("text");
-          _$insertNode(_el$16, _el$17);
-          _$setProp(_el$16, "flexDirection", "column");
-          _$insertNode(_el$17, _el$18);
-          _$insertNode(_el$17, _el$21);
-          _$setProp(_el$17, "flexDirection", "row");
-          _$setProp(_el$17, "gap", 1);
-          _$setProp(_el$17, "paddingRight", 1);
-          _$insertNode(_el$18, _el$19);
-          _$insertNode(_el$18, _el$20);
-          _$setProp(_el$18, "flexDirection", "row");
-          _$setProp(_el$18, "gap", 1);
-          _$setProp(_el$18, "flexGrow", 1);
-          _$setProp(_el$18, "minWidth", 0);
-          _$setProp(_el$18, "onMouseUp", () => props.toggle(group.key));
-          _$setProp(_el$19, "flexShrink", 0);
-          _$insert(_el$19, () => isCollapsed() ? "▶" : "▼");
-          _$setProp(_el$20, "wrapMode", "none");
-          _$setProp(_el$20, "truncate", true);
-          _$setProp(_el$20, "flexGrow", 1);
-          _$setProp(_el$20, "minWidth", 0);
-          _$insert(_el$20, () => `${group.label} (${group.rows.length})`);
-          _$insertNode(_el$21, _$createTextNode(`+`));
-          _$setProp(_el$21, "flexShrink", 0);
-          _$setProp(_el$21, "onMouseUp", e => {
+          var _el$24 = _$createElement("box"),
+            _el$25 = _$createElement("box"),
+            _el$26 = _$createElement("box"),
+            _el$27 = _$createElement("text"),
+            _el$28 = _$createElement("text"),
+            _el$29 = _$createElement("text");
+          _$insertNode(_el$24, _el$25);
+          _$setProp(_el$24, "flexDirection", "column");
+          _$insertNode(_el$25, _el$26);
+          _$insertNode(_el$25, _el$29);
+          _$setProp(_el$25, "flexDirection", "row");
+          _$setProp(_el$25, "gap", 1);
+          _$setProp(_el$25, "paddingRight", 1);
+          _$insertNode(_el$26, _el$27);
+          _$insertNode(_el$26, _el$28);
+          _$setProp(_el$26, "flexDirection", "row");
+          _$setProp(_el$26, "gap", 1);
+          _$setProp(_el$26, "flexGrow", 1);
+          _$setProp(_el$26, "minWidth", 0);
+          _$setProp(_el$26, "onMouseUp", () => props.toggle(group.key));
+          _$setProp(_el$27, "flexShrink", 0);
+          _$insert(_el$27, () => isCollapsed() ? "▶" : "▼");
+          _$setProp(_el$28, "wrapMode", "none");
+          _$setProp(_el$28, "truncate", true);
+          _$setProp(_el$28, "flexGrow", 1);
+          _$setProp(_el$28, "minWidth", 0);
+          _$insert(_el$28, () => `${group.label} (${group.rows.length})`);
+          _$insert(_el$25, _$createComponent(Show, {
+            get when() {
+              return props.projects().find(p => p.id === group.key);
+            },
+            children: project => (() => {
+              var _el$31 = _$createElement("text");
+              _$setProp(_el$31, "flexShrink", 0);
+              _$setProp(_el$31, "onMouseUp", e => {
+                e?.stopPropagation?.();
+                props.toggleProjectArchive(project());
+              });
+              _$insert(_el$31, () => isArchivedTitle(project().name) ? "⇡" : "⇣");
+              _$effect(_$p => _$setProp(_el$31, "fg", context.theme.text.muted, _$p));
+              return _el$31;
+            })()
+          }), _el$29);
+          _$insertNode(_el$29, _$createTextNode(`+`));
+          _$setProp(_el$29, "flexShrink", 0);
+          _$setProp(_el$29, "onMouseUp", e => {
             e?.stopPropagation?.();
             props.createSession(group.dir);
           });
-          _$insert(_el$16, _$createComponent(Show, {
+          _$insert(_el$24, _$createComponent(Show, {
             get when() {
               return !isCollapsed();
             },
@@ -449,36 +694,36 @@ function SessionsByProject(props) {
             }
           }), null);
           _$effect(_p$ => {
-            var _v$0 = context.theme.text.muted,
-              _v$1 = context.theme.text.base,
-              _v$10 = context.theme.text.base;
-            _v$0 !== _p$.e && (_p$.e = _$setProp(_el$19, "fg", _v$0, _p$.e));
-            _v$1 !== _p$.t && (_p$.t = _$setProp(_el$20, "fg", _v$1, _p$.t));
-            _v$10 !== _p$.a && (_p$.a = _$setProp(_el$21, "fg", _v$10, _p$.a));
+            var _v$13 = context.theme.text.muted,
+              _v$14 = context.theme.text.base,
+              _v$15 = context.theme.text.base;
+            _v$13 !== _p$.e && (_p$.e = _$setProp(_el$27, "fg", _v$13, _p$.e));
+            _v$14 !== _p$.t && (_p$.t = _$setProp(_el$28, "fg", _v$14, _p$.t));
+            _v$15 !== _p$.a && (_p$.a = _$setProp(_el$29, "fg", _v$15, _p$.a));
             return _p$;
           }, {
             e: undefined,
             t: undefined,
             a: undefined
           });
-          return _el$16;
+          return _el$24;
         })();
       }
     }), null);
     _$effect(_p$ => {
-      var _v$7 = context.theme.text.base,
-        _v$8 = props.showArchived() ? context.theme.hue?.orange?.[200] ?? context.theme.text.base : context.theme.text.muted,
-        _v$9 = context.theme.text.muted;
-      _v$7 !== _p$.e && (_p$.e = _$setProp(_el$1, "fg", _v$7, _p$.e));
-      _v$8 !== _p$.t && (_p$.t = _$setProp(_el$12, "fg", _v$8, _p$.t));
-      _v$9 !== _p$.a && (_p$.a = _$setProp(_el$14, "fg", _v$9, _p$.a));
+      var _v$10 = context.theme.text.base,
+        _v$11 = props.showArchived() ? context.theme.hue?.orange?.[200] ?? context.theme.text.base : context.theme.text.muted,
+        _v$12 = context.theme.text.muted;
+      _v$10 !== _p$.e && (_p$.e = _$setProp(_el$17, "fg", _v$10, _p$.e));
+      _v$11 !== _p$.t && (_p$.t = _$setProp(_el$20, "fg", _v$11, _p$.t));
+      _v$12 !== _p$.a && (_p$.a = _$setProp(_el$22, "fg", _v$12, _p$.a));
       return _p$;
     }, {
       e: undefined,
       t: undefined,
       a: undefined
     });
-    return _el$9;
+    return _el$15;
   })();
 }
 
@@ -495,14 +740,14 @@ function McpStatus(props) {
       return servers().length > 0;
     },
     get children() {
-      var _el$23 = _$createElement("text");
-      _$setProp(_el$23, "onMouseUp", () => context.keymap?.dispatch?.("mcp.list"));
-      _$insert(_el$23, (() => {
+      var _el$32 = _$createElement("text");
+      _$setProp(_el$32, "onMouseUp", () => context.keymap?.dispatch?.("mcp.list"));
+      _$insert(_el$32, (() => {
         var _c$ = _$memo(() => failed().length > 0);
         return () => _c$() ? `MCP ${failed().length} failed` : `MCP ${connected().length}`;
       })());
-      _$effect(_$p => _$setProp(_el$23, "fg", failed().length > 0 ? context.theme.text.feedback?.error?.base ?? context.theme.text.base : connected().length > 0 ? context.theme.text.feedback?.success?.base ?? context.theme.text.muted : context.theme.text.muted, _$p));
-      return _el$23;
+      _$effect(_$p => _$setProp(_el$32, "fg", failed().length > 0 ? context.theme.text.feedback?.error?.base ?? context.theme.text.base : connected().length > 0 ? context.theme.text.feedback?.success?.base ?? context.theme.text.muted : context.theme.text.muted, _$p));
+      return _el$32;
     }
   });
 }
@@ -521,33 +766,50 @@ function HomeSidebar(props) {
       return _$memo(() => route()?.type === "home")() && width() >= 120;
     },
     get children() {
-      var _el$24 = _$createElement("box"),
-        _el$25 = _$createElement("scrollbox");
-      _$insertNode(_el$24, _el$25);
-      _$setProp(_el$24, "position", "absolute");
-      _$setProp(_el$24, "top", 1);
-      _$setProp(_el$24, "right", 0);
-      _$setProp(_el$24, "bottom", 0);
-      _$setProp(_el$24, "width", 44);
-      _$setProp(_el$24, "paddingLeft", 1);
-      _$setProp(_el$24, "paddingRight", 1);
-      _$setProp(_el$25, "flexGrow", 1);
-      _$setProp(_el$25, "minHeight", 0);
-      _$setProp(_el$25, "width", "100%");
-      _$setProp(_el$25, "verticalScrollbarOptions", {
+      var _el$33 = _$createElement("box"),
+        _el$34 = _$createElement("scrollbox");
+      _$insertNode(_el$33, _el$34);
+      _$setProp(_el$33, "position", "absolute");
+      _$setProp(_el$33, "top", 1);
+      _$setProp(_el$33, "right", 0);
+      _$setProp(_el$33, "bottom", 0);
+      _$setProp(_el$33, "width", 44);
+      _$setProp(_el$33, "paddingLeft", 1);
+      _$setProp(_el$33, "paddingRight", 1);
+      _$setProp(_el$34, "flexGrow", 1);
+      _$setProp(_el$34, "minHeight", 0);
+      _$setProp(_el$34, "width", "100%");
+      _$setProp(_el$34, "verticalScrollbarOptions", {
         visible: true
       });
-      _$insert(_el$25, () => props.children);
-      _$effect(_$p => _$setProp(_el$24, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
-      return _el$24;
+      _$insert(_el$34, () => props.children);
+      _$effect(_$p => _$setProp(_el$33, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
+      return _el$33;
     }
   });
 }
 export default Plugin.define({
   id: "jump-sidebar",
   setup(context) {
+    trace("setup");
+    trace(`keys ctx=${Object.keys(context).join(",")}`);
+    trace(`keys ui=${Object.keys(context.ui ?? {}).join(",")}`);
+    trace(`keys data=${Object.keys(context.data ?? {}).join(",")}`);
+    trace(`keys app=${Object.keys(context.app ?? {}).join(",")}`);
+    trace(`keys renderer=${Object.keys(context.renderer ?? {}).join(",")}`);
+    const cb = context.renderer?.clipboard;
+    trace(`clipboard proto=${Object.getOwnPropertyNames(Object.getPrototypeOf(cb ?? {})).join(",")}`);
+    const rp = context.renderer;
+    trace(`renderer proto=${Object.getOwnPropertyNames(Object.getPrototypeOf(rp ?? {})).filter(k => /clip|copy|paste/i.test(k)).join(",")}`);
+    try {
+      trace(`prompt commands=${(context.keymap?.commands?.() ?? []).map(c => c.id).filter(id => id.startsWith("prompt")).join(",")}`);
+    } catch (err) {
+      trace(`keymap error ${err?.message ?? err}`);
+    }
     const [sessions, setSessions] = createSignal([]);
     const [projects, setProjects] = createSignal([]);
+    // Bumped on every refresh so the todo panel recomputes from the message store.
+    const [revision, setRevision] = createSignal(0);
     const [working, setWorking] = createSignal({});
     const [kinds, setKinds] = createSignal({});
     const [decorations, setDecorations] = createSignal({});
@@ -646,6 +908,7 @@ export default Plugin.define({
         if (sd.length) setSessions(sd);
         if (pd.length) setProjects(pd);
       }
+      setRevision(n => n + 1);
     };
     const schedule = () => {
       clearTimeout(refetchTimer);
@@ -811,6 +1074,71 @@ export default Plugin.define({
       }
     };
 
+    // Sessions that belong to a project, using the same key rules as the sidebar
+    // grouping, and that still need archiving.
+    const projectChildren = project => {
+      const dir = projectDir(project);
+      return sessions().filter(s => !isArchived(s) && (s.projectID === project.id || !s.projectID && (s.location?.directory ?? s.directory) === dir));
+    };
+
+    // Archive/unarchive a project by prefixing its name. Archiving a project also
+    // archives every session in it that is not already archived.
+    const toggleProjectArchive = async project => {
+      const label = project?.name || basename(projectDir(project)) || projectDir(project);
+      const archived = isArchivedTitle(project?.name);
+      try {
+        if (!archived) {
+          const children = projectChildren(project);
+          const ok = await context.ui.dialog.confirm({
+            title: "Archive project",
+            message: children.length > 0 ? `Archive "${label}" and ${children.length} session${children.length === 1 ? "" : "s"}?` : `Archive "${label}"?`,
+            label: {
+              confirm: "Archive",
+              cancel: "Cancel"
+            }
+          });
+          if (!ok) return;
+          const next = toArchivedTitle(label);
+          await context.client.project.update({
+            projectID: project.id,
+            name: next
+          });
+          setProjects(prev => prev.map(p => p.id === project.id ? {
+            ...p,
+            name: next
+          } : p));
+          const results = await Promise.allSettled(children.map(s => context.client.session.update({
+            sessionID: s.id,
+            title: toArchivedTitle(s.title || defaultTitle(s))
+          })));
+          const failed = results.filter(r => r.status === "rejected").length;
+          if (failed) {
+            context.ui.toast.show({
+              message: `${failed} session${failed === 1 ? "" : "s"} could not be archived`,
+              variant: "warning"
+            });
+          }
+          schedule();
+          return;
+        }
+        const next = toUnarchivedTitle(project?.name ?? label);
+        await context.client.project.update({
+          projectID: project.id,
+          name: next
+        });
+        setProjects(prev => prev.map(p => p.id === project.id ? {
+          ...p,
+          name: next
+        } : p));
+        schedule();
+      } catch (err) {
+        context.ui.toast.show({
+          message: `Project archive failed: ${err?.message ?? err}`,
+          variant: "error"
+        });
+      }
+    };
+
     // Show/hide archived, persisted across restarts when storage is available.
     let showArchived;
     let toggleArchived;
@@ -949,6 +1277,25 @@ export default Plugin.define({
               await newProject();
             }
           }, {
+            id: "project.archive.toggle",
+            title: "Archive / unarchive project",
+            group: "Project",
+            palette: true,
+            run: async () => {
+              const route = context.ui.router.current();
+              const sessionID = route?.type === "session" ? route.sessionID : undefined;
+              const session = sessions().find(s => s.id === sessionID) ?? context.data.session.get?.(sessionID);
+              const project = projects().find(p => p.id === session?.projectID);
+              if (!project) {
+                context.ui.toast.show({
+                  message: "Open a session in a project first",
+                  variant: "warning"
+                });
+                return;
+              }
+              await toggleProjectArchive(project);
+            }
+          }, {
             id: "session.tabs.closeOthers",
             title: "Close other tabs",
             group: "Session",
@@ -995,6 +1342,7 @@ export default Plugin.define({
       context: context,
       sessionID: sessionID,
       sessions: sessions,
+      revision: revision,
       projects: projects,
       working: working,
       kinds: kinds,
@@ -1005,6 +1353,7 @@ export default Plugin.define({
       createSession: createSession,
       newProject: newProject,
       toggleArchive: toggleArchive,
+      toggleProjectArchive: toggleProjectArchive,
       unreadLocal: unreadLocal,
       toggleUnread: toggleUnread,
       decorations: decorations

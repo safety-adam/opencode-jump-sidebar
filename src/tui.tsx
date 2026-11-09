@@ -1,8 +1,9 @@
 import { Plugin } from "@opencode/plugin/tui"
 import { For, Show, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js"
-import { mkdirSync, readFileSync, readdirSync } from "node:fs"
+import { mkdirSync, readFileSync, readdirSync, appendFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { isAbsolute, join } from "node:path"
+import { execSync } from "node:child_process"
 import { isArchivedTitle, toArchivedTitle, toUnarchivedTitle } from "./archive.ts"
 
 // Spinner frames used by the TUI for a busy/working session.
@@ -79,6 +80,22 @@ type Decoration = {
   label?: string
 }
 
+function sidebarDir(): string {
+  return (
+    process.env.OPENCODE_SIDEBAR_DIR ||
+    join(homedir(), ".local", "share", "opencode", "sidebar")
+  )
+}
+
+// Temporary tracing for the todo panel. Remove once the panel is confirmed.
+function trace(message: string) {
+  try {
+    const base = sidebarDir()
+    mkdirSync(base, { recursive: true })
+    appendFileSync(join(base, "todos-debug.log"), `${new Date().toISOString()} ${message}\n`)
+  } catch {}
+}
+
 function readDecorations(): Record<string, Decoration> {
   try {
     const base =
@@ -106,24 +123,197 @@ function readDecorations(): Record<string, Decoration> {
   }
 }
 
+// Todos come from the latest todowrite tool part in the session messages. The
+// tool input holds the whole list, so the last call wins and an empty list
+// clears the panel.
+// Returns null when the transcript holds no todowrite call at all, so an empty
+// array always means the agent cleared the list.
+function todosFromMessages(messages: any[]): any[] | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const content = messages[i]?.content
+    if (!Array.isArray(content)) continue
+    for (let j = content.length - 1; j >= 0; j--) {
+      const part = content[j]
+      if (part?.type !== "tool" || part?.name !== "todowrite") continue
+      const todos = part.state?.input?.todos ?? part.state?.metadata?.todos
+      if (Array.isArray(todos)) return todos
+    }
+  }
+  return null
+}
+
+function readTodos(context: any, sessionID?: string): any[] | null {
+  if (!sessionID) return null
+  try {
+    return todosFromMessages(context.data.session.message.list?.(sessionID) ?? [])
+  } catch {
+    return null
+  }
+}
+
+const TODO_ICON: Record<string, string> = {
+  pending: "[ ]",
+  in_progress: "[•]",
+  completed: "[✓]",
+  cancelled: "[-]",
+}
+
+function TodoPanel(props: {
+  context: any
+  sessionID?: string
+  revision: () => void
+}) {
+  const context = props.context
+  const [todos, setTodos] = createSignal<any[]>([])
+  let ticket = 0
+  let fetchedAt = 0
+
+  // The sidebar tells us the open session. On the home screen it does not, so
+  // fall back to the route.
+  const session = () => {
+    if (props.sessionID) return props.sessionID
+    const route = context.ui.router.current?.()
+    return route?.type === "session" ? route.sessionID : undefined
+  }
+
+  let shown: string | undefined
+  const load = (sessionID?: string) => {
+    const current = ++ticket
+    if (sessionID !== shown) {
+      shown = sessionID
+      setTodos([])
+    }
+    if (!sessionID) return
+    // The client store empties and refills while a session streams, so only a
+    // real todowrite call may change what is on screen.
+    const cached = readTodos(context, sessionID)
+    if (cached) {
+      if (cached.length) trace(`panel ${sessionID} store=${cached.length}`)
+      setTodos(cached)
+      return
+    }
+    if (Date.now() - fetchedAt < 30_000) return
+    fetchedAt = Date.now()
+    try {
+      void context.client.message
+        .list({ sessionID, limit: 200, order: "desc" })
+        .then((res: any) => {
+          if (current !== ticket) return
+          const page = unwrap(res) ?? res?.data ?? []
+          const found = todosFromMessages([...page].reverse())
+          trace(`panel ${sessionID} api page=${page.length} found=${found?.length ?? "none"}`)
+          if (found) setTodos(found)
+        })
+        .catch((err: any) => {
+          trace(`panel ${sessionID} api error ${err?.message ?? err}`)
+        })
+    } catch (err: any) {
+      trace(`panel ${sessionID} api threw ${err?.message ?? err}`)
+    }
+  }
+
+  createEffect(on(() => [session(), props.revision()] as const, ([sessionID]) => load(sessionID)))
+
+  const writeClipboard = (text: string) => {
+    if (process.platform === "darwin") {
+      execSync("pbcopy", { input: text })
+      return
+    }
+    // Other platforms go through the terminal's OSC 52 support.
+    context.renderer?.copyToClipboardOSC52?.(text)
+  }
+
+  // Clicking an item drafts the prompt for it into the composer without sending.
+  // The TUI gives plugins no way to write the composer, so the text goes through
+  // the clipboard and the built-in paste command, then the clipboard is restored.
+  const draft = (content: string) => {
+    const text = `Start "${content}" and mark it in progress.`
+    let previous: string | undefined
+    try {
+      if (process.platform === "darwin") previous = execSync("pbpaste", { encoding: "utf8" })
+      writeClipboard(text)
+      context.keymap?.dispatch("prompt.paste")
+      trace(`draft ${content.slice(0, 40)}`)
+    } catch (err: any) {
+      trace(`draft error ${err?.message ?? err}`)
+      context.ui?.toast?.show({ message: "Could not draft the todo prompt", variant: "error" })
+      return
+    }
+    if (previous === undefined) return
+    setTimeout(() => {
+      try {
+        execSync("pbcopy", { input: previous })
+      } catch {}
+    }, 400)
+  }
+
+  const done = () => todos().filter((t) => t.status === "completed").length
+  const color = (status: string) => {
+    if (status === "in_progress")
+      return context.theme.hue?.orange?.[200] ?? context.theme.text.feedback?.warning?.base
+    if (status === "cancelled" || status === "completed") return context.theme.text.faint
+    return context.theme.text.muted
+  }
+
+  return (
+    <Show when={todos().length > 0}>
+      <box flexDirection="column" gap={0} paddingRight={1}>
+        <box flexDirection="row" gap={1}>
+          <text fg={context.theme.text.base} attributes={1}>
+            Todos
+          </text>
+          <text fg={context.theme.text.faint}>{`${done()}/${todos().length}`}</text>
+        </box>
+        <For each={todos()}>
+          {(todo) => (
+            <box flexDirection="row" gap={1}>
+              <text fg={color(todo.status)} flexShrink={0}>
+                {TODO_ICON[todo.status] ?? "[ ]"}
+              </text>
+              <text
+                fg={color(todo.status)}
+                attributes={todo.status === "cancelled" ? 128 : 0}
+                wrapMode="word"
+                flexGrow={1}
+                minWidth={0}
+                onMouseUp={() => {
+                  if (todo.status === "completed" || todo.status === "cancelled") return
+                  draft(todo.content)
+                }}
+              >
+                {todo.content}
+              </text>
+            </box>
+          )}
+        </For>
+      </box>
+    </Show>
+  )
+}
+
 function groupSessions(
   sessions: any[],
   projects: any[],
   showArchived: boolean,
 ): { key: string; label: string; dir?: string; rows: any[] }[] {
   const byId = new Map<string, any>(projects.map((p) => [p.id, p]))
+  const archivedProjects = new Set(
+    projects.filter((p) => isArchivedTitle(p.name)).map((p) => p.id),
+  )
 
   const groups = new Map<string, { key: string; label: string; dir?: string; rows: any[] }>()
   // Seed a group for every project, even if it has no sessions.
   for (const p of projects) {
     const dir = projectDir(p)
     if (!dir || dir === "/") continue // skip the filesystem-root pseudo-project
+    if (!showArchived && archivedProjects.has(p.id)) continue
     const label = p.name || basename(dir) || dir
     groups.set(p.id, { key: p.id, label, dir, rows: [] })
   }
   for (const s of sessions) {
     if (s.parentID) continue // root sessions only
     if (!showArchived && isArchived(s)) continue
+    if (!showArchived && s.projectID && archivedProjects.has(s.projectID)) continue
     const dir = s.location?.directory ?? s.directory
     const project = byId.get(s.projectID)
     const label =
@@ -230,7 +420,7 @@ function SessionRow(props: {
     if (busy()) return SPINNER[props.frame() % SPINNER.length]
     if (hasBackground()) return BACKGROUND[Math.floor(props.frame() / 5) % BACKGROUND.length]
     if (retry()) return "!"
-    if (props.unread) return "•"
+    if (props.unread) return "●"
     return " "
   }
   // Colours match the TUI: attention (! / ?) = hue.accent[200], working = hue.orange[200].
@@ -309,7 +499,7 @@ function SessionRow(props: {
           props.onToggleUnread?.()
         }}
       >
-        {props.localUnread ? "•" : "·"}
+        {props.localUnread ? "●" : "·"}
       </text>
       <text
         fg={context.theme.text.muted}
@@ -329,6 +519,7 @@ function SessionsByProject(props: {
   context: any
   sessionID?: string
   sessions: () => any[]
+  revision: () => void
   projects: () => any[]
   working: () => Record<string, boolean>
   kinds: () => Record<string, string>
@@ -339,6 +530,7 @@ function SessionsByProject(props: {
   createSession: (dir?: string) => void
   newProject: () => void
   toggleArchive: (id: string) => void
+  toggleProjectArchive: (project: any) => void
   unreadLocal: () => Record<string, boolean>
   toggleUnread: (id: string) => void
   decorations: () => Record<string, Decoration>
@@ -370,6 +562,11 @@ function SessionsByProject(props: {
 
   return (
     <box flexDirection="column" paddingTop={1} gap={1}>
+      <TodoPanel
+        context={context}
+        sessionID={props.sessionID}
+        revision={props.revision}
+      />
       <box flexDirection="row" paddingRight={1}>
         <text
           fg={context.theme.text.base}
@@ -426,6 +623,20 @@ function SessionsByProject(props: {
                     {`${group.label} (${group.rows.length})`}
                   </text>
                 </box>
+                <Show when={props.projects().find((p) => p.id === group.key)}>
+                  {(project) => (
+                    <text
+                      fg={context.theme.text.muted}
+                      flexShrink={0}
+                      onMouseUp={(e: any) => {
+                        e?.stopPropagation?.()
+                        props.toggleProjectArchive(project())
+                      }}
+                    >
+                      {isArchivedTitle(project().name) ? "⇡" : "⇣"}
+                    </text>
+                  )}
+                </Show>
                 <text
                   fg={context.theme.text.base}
                   flexShrink={0}
@@ -541,8 +752,25 @@ function HomeSidebar(props: { context: any; children?: any }) {
 export default Plugin.define({
   id: "jump-sidebar",
   setup(context: any) {
+    trace("setup")
+    trace(`keys ctx=${Object.keys(context).join(",")}`)
+    trace(`keys ui=${Object.keys(context.ui ?? {}).join(",")}`)
+    trace(`keys data=${Object.keys(context.data ?? {}).join(",")}`)
+    trace(`keys app=${Object.keys(context.app ?? {}).join(",")}`)
+    trace(`keys renderer=${Object.keys(context.renderer ?? {}).join(",")}`)
+    const cb = context.renderer?.clipboard
+    trace(`clipboard proto=${Object.getOwnPropertyNames(Object.getPrototypeOf(cb ?? {})).join(",")}`)
+    const rp = context.renderer
+    trace(`renderer proto=${Object.getOwnPropertyNames(Object.getPrototypeOf(rp ?? {})).filter((k) => /clip|copy|paste/i.test(k)).join(",")}`)
+    try {
+      trace(`prompt commands=${(context.keymap?.commands?.() ?? []).map((c: any) => c.id).filter((id: string) => id.startsWith("prompt")).join(",")}`)
+    } catch (err: any) {
+      trace(`keymap error ${err?.message ?? err}`)
+    }
     const [sessions, setSessions] = createSignal<any[]>([])
     const [projects, setProjects] = createSignal<any[]>([])
+    // Bumped on every refresh so the todo panel recomputes from the message store.
+    const [revision, setRevision] = createSignal(0)
     const [working, setWorking] = createSignal<Record<string, boolean>>({})
     const [kinds, setKinds] = createSignal<Record<string, string>>({})
     const [decorations, setDecorations] = createSignal<Record<string, Decoration>>({})
@@ -647,6 +875,7 @@ export default Plugin.define({
         if (sd.length) setSessions(sd)
         if (pd.length) setProjects(pd)
       }
+      setRevision((n) => n + 1)
     }
     const schedule = () => {
       clearTimeout(refetchTimer)
@@ -812,6 +1041,72 @@ export default Plugin.define({
       }
     }
 
+    // Sessions that belong to a project, using the same key rules as the sidebar
+    // grouping, and that still need archiving.
+    const projectChildren = (project: any) => {
+      const dir = projectDir(project)
+      return sessions().filter(
+        (s) =>
+          !isArchived(s) &&
+          (s.projectID === project.id ||
+            (!s.projectID && (s.location?.directory ?? s.directory) === dir)),
+      )
+    }
+
+    // Archive/unarchive a project by prefixing its name. Archiving a project also
+    // archives every session in it that is not already archived.
+    const toggleProjectArchive = async (project: any) => {
+      const label = project?.name || basename(projectDir(project)) || projectDir(project)
+      const archived = isArchivedTitle(project?.name)
+      try {
+        if (!archived) {
+          const children = projectChildren(project)
+          const ok = await context.ui.dialog.confirm({
+            title: "Archive project",
+            message:
+              children.length > 0
+                ? `Archive "${label}" and ${children.length} session${children.length === 1 ? "" : "s"}?`
+                : `Archive "${label}"?`,
+            label: { confirm: "Archive", cancel: "Cancel" },
+          })
+          if (!ok) return
+          const next = toArchivedTitle(label)
+          await context.client.project.update({ projectID: project.id, name: next })
+          setProjects((prev) =>
+            prev.map((p) => (p.id === project.id ? { ...p, name: next } : p)),
+          )
+          const results = await Promise.allSettled(
+            children.map((s) =>
+              context.client.session.update({
+                sessionID: s.id,
+                title: toArchivedTitle(s.title || defaultTitle(s)),
+              }),
+            ),
+          )
+          const failed = results.filter((r) => r.status === "rejected").length
+          if (failed) {
+            context.ui.toast.show({
+              message: `${failed} session${failed === 1 ? "" : "s"} could not be archived`,
+              variant: "warning",
+            })
+          }
+          schedule()
+          return
+        }
+        const next = toUnarchivedTitle(project?.name ?? label)
+        await context.client.project.update({ projectID: project.id, name: next })
+        setProjects((prev) =>
+          prev.map((p) => (p.id === project.id ? { ...p, name: next } : p)),
+        )
+        schedule()
+      } catch (err: any) {
+        context.ui.toast.show({
+          message: `Project archive failed: ${err?.message ?? err}`,
+          variant: "error",
+        })
+      }
+    }
+
     // Show/hide archived, persisted across restarts when storage is available.
     let showArchived: () => boolean
     let toggleArchived: () => void
@@ -946,6 +1241,28 @@ export default Plugin.define({
                 },
               },
               {
+                id: "project.archive.toggle",
+                title: "Archive / unarchive project",
+                group: "Project",
+                palette: true,
+                run: async () => {
+                  const route = context.ui.router.current()
+                  const sessionID = route?.type === "session" ? route.sessionID : undefined
+                  const session =
+                    sessions().find((s) => s.id === sessionID) ??
+                    context.data.session.get?.(sessionID)
+                  const project = projects().find((p) => p.id === session?.projectID)
+                  if (!project) {
+                    context.ui.toast.show({
+                      message: "Open a session in a project first",
+                      variant: "warning",
+                    })
+                    return
+                  }
+                  await toggleProjectArchive(project)
+                },
+              },
+              {
                 id: "session.tabs.closeOthers",
                 title: "Close other tabs",
                 group: "Session",
@@ -998,6 +1315,7 @@ export default Plugin.define({
         context={context}
         sessionID={sessionID}
         sessions={sessions}
+        revision={revision}
         projects={projects}
         working={working}
         kinds={kinds}
@@ -1008,6 +1326,7 @@ export default Plugin.define({
         createSession={createSession}
         newProject={newProject}
         toggleArchive={toggleArchive}
+        toggleProjectArchive={toggleProjectArchive}
         unreadLocal={unreadLocal}
         toggleUnread={toggleUnread}
         decorations={decorations}
