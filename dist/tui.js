@@ -7,6 +7,7 @@ import { insertNode as _$insertNode } from "@opentui/solid";
 import { setProp as _$setProp } from "@opentui/solid";
 import { createElement as _$createElement } from "@opentui/solid";
 import { Plugin } from "@opencode/plugin/tui";
+import { Portal } from "@opentui/solid";
 import { For, Show, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js";
 import { mkdirSync, readFileSync, readdirSync, appendFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -785,6 +786,7 @@ function SessionsByProject(props) {
   });
   const [dropTarget, setDropTarget] = createSignal();
   const [preview, setPreview] = createSignal();
+  const [dragActive, setDragActive] = createSignal(false);
   let drag;
   let suppressOpenUntil = 0;
 
@@ -904,12 +906,14 @@ function SessionsByProject(props) {
       targetKey: target.group.key,
       targetIndex: target.index
     });
+    setDragActive(true);
   };
   const endDrag = () => {
     const current = drag;
     drag = undefined;
     setDropTarget(undefined);
     setPreview(undefined);
+    setDragActive(false);
     if (!current || !current.target) return;
     suppressOpenUntil = Date.now() + 300;
     const source = groups().find(group => group.key === current.sourceKey);
@@ -971,7 +975,6 @@ function SessionsByProject(props) {
     _$setProp(_el$20, "paddingTop", 1);
     _$setProp(_el$20, "gap", 1);
     _$setProp(_el$20, "onMouseDrag", event => updateDrag(event));
-    _$setProp(_el$20, "onMouseDragEnd", endDrag);
     _$setProp(_el$20, "onMouseUp", () => endDrag());
     _$insert(_el$20, _$createComponent(TodoPanel, {
       context: context,
@@ -1011,54 +1014,56 @@ function SessionsByProject(props) {
       children: group => {
         const isCollapsed = () => props.collapsed()[group.key] === true;
         return (() => {
-          var _el$29 = _$createElement("box"),
-            _el$30 = _$createElement("box"),
+          var _el$30 = _$createElement("box"),
             _el$31 = _$createElement("box"),
-            _el$32 = _$createElement("text"),
+            _el$32 = _$createElement("box"),
             _el$33 = _$createElement("text"),
-            _el$34 = _$createElement("text");
-          _$insertNode(_el$29, _el$30);
-          _$setProp(_el$29, "flexDirection", "column");
+            _el$34 = _$createElement("text"),
+            _el$35 = _$createElement("text");
           _$insertNode(_el$30, _el$31);
-          _$insertNode(_el$30, _el$34);
-          _$setProp(_el$30, "flexDirection", "row");
-          _$setProp(_el$30, "gap", 1);
-          _$setProp(_el$30, "paddingRight", 1);
-          _$setProp(_el$30, "onMouseUp", e => {
+          _$setProp(_el$30, "flexDirection", "column");
+          _$insertNode(_el$31, _el$32);
+          _$insertNode(_el$31, _el$35);
+          _$setProp(_el$31, "flexDirection", "row");
+          _$setProp(_el$31, "gap", 1);
+          _$setProp(_el$31, "paddingRight", 1);
+          _$setProp(_el$31, "onMouseUp", e => {
             if (e?.button !== 2) return;
             e.preventDefault?.();
             e.stopPropagation?.();
             const project = props.projects().find(p => p.id === group.key);
             if (project) props.openProjectMenu(project, e.x ?? 0, e.y ?? 0);
           });
-          _$insertNode(_el$31, _el$32);
-          _$insertNode(_el$31, _el$33);
-          _$setProp(_el$31, "flexDirection", "row");
-          _$setProp(_el$31, "gap", 1);
-          _$setProp(_el$31, "flexGrow", 1);
-          _$setProp(_el$31, "minWidth", 0);
-          _$setProp(_el$31, "onMouseUp", e => {
+          _$insertNode(_el$32, _el$33);
+          _$insertNode(_el$32, _el$34);
+          _$setProp(_el$32, "flexDirection", "row");
+          _$setProp(_el$32, "gap", 1);
+          _$setProp(_el$32, "flexGrow", 1);
+          _$setProp(_el$32, "minWidth", 0);
+          _$setProp(_el$32, "onMouseUp", e => {
             if (e?.button !== 0) return;
+            if (Date.now() < suppressOpenUntil) return;
             props.toggle(group.key);
           });
-          _$setProp(_el$32, "selectable", false);
-          _$setProp(_el$32, "flexShrink", 0);
-          _$insert(_el$32, () => isCollapsed() ? "▶" : "▼");
           _$setProp(_el$33, "selectable", false);
-          _$setProp(_el$33, "wrapMode", "none");
-          _$setProp(_el$33, "truncate", true);
-          _$setProp(_el$33, "flexGrow", 1);
-          _$setProp(_el$33, "minWidth", 0);
-          _$insert(_el$33, () => `${group.label} (${rowsFor(group).length})`);
-          _$insertNode(_el$34, _$createTextNode(`+`));
+          _$setProp(_el$33, "flexShrink", 0);
+          _$insert(_el$33, () => isCollapsed() ? "▶" : "▼");
           _$setProp(_el$34, "selectable", false);
-          _$setProp(_el$34, "flexShrink", 0);
-          _$setProp(_el$34, "onMouseUp", e => {
+          _$setProp(_el$34, "wrapMode", "none");
+          _$setProp(_el$34, "truncate", true);
+          _$setProp(_el$34, "flexGrow", 1);
+          _$setProp(_el$34, "minWidth", 0);
+          _$insert(_el$34, () => `${group.label} (${rowsFor(group).length})`);
+          _$insertNode(_el$35, _$createTextNode(`+`));
+          _$setProp(_el$35, "selectable", false);
+          _$setProp(_el$35, "flexShrink", 0);
+          _$setProp(_el$35, "onMouseUp", e => {
             if (e?.button !== 0) return;
+            if (Date.now() < suppressOpenUntil) return;
             e.stopPropagation?.();
             props.createSession(group.dir);
           });
-          _$insert(_el$29, _$createComponent(Show, {
+          _$insert(_el$30, _$createComponent(Show, {
             get when() {
               return !isCollapsed();
             },
@@ -1110,10 +1115,10 @@ function SessionsByProject(props) {
               _v$20 = context.theme.text.muted,
               _v$21 = context.theme.text.base,
               _v$22 = context.theme.text.base;
-            _v$19 !== _p$.e && (_p$.e = _$setProp(_el$30, "backgroundColor", _v$19, _p$.e));
-            _v$20 !== _p$.t && (_p$.t = _$setProp(_el$32, "fg", _v$20, _p$.t));
-            _v$21 !== _p$.a && (_p$.a = _$setProp(_el$33, "fg", _v$21, _p$.a));
-            _v$22 !== _p$.o && (_p$.o = _$setProp(_el$34, "fg", _v$22, _p$.o));
+            _v$19 !== _p$.e && (_p$.e = _$setProp(_el$31, "backgroundColor", _v$19, _p$.e));
+            _v$20 !== _p$.t && (_p$.t = _$setProp(_el$33, "fg", _v$20, _p$.t));
+            _v$21 !== _p$.a && (_p$.a = _$setProp(_el$34, "fg", _v$21, _p$.a));
+            _v$22 !== _p$.o && (_p$.o = _$setProp(_el$35, "fg", _v$22, _p$.o));
             return _p$;
           }, {
             e: undefined,
@@ -1121,8 +1126,37 @@ function SessionsByProject(props) {
             a: undefined,
             o: undefined
           });
-          return _el$29;
+          return _el$30;
         })();
+      }
+    }), null);
+    _$insert(_el$20, _$createComponent(Show, {
+      get when() {
+        return dragActive();
+      },
+      get children() {
+        return _$createComponent(Portal, {
+          ref: container => {
+            if (!container) return;
+            container.position = "absolute";
+            container.left = 0;
+            container.top = 0;
+            container.zIndex = 2600;
+          },
+          get children() {
+            var _el$29 = _$createElement("box");
+            _$setProp(_el$29, "position", "absolute");
+            _$setProp(_el$29, "left", 0);
+            _$setProp(_el$29, "top", 0);
+            _$setProp(_el$29, "width", "100%");
+            _$setProp(_el$29, "height", "100%");
+            _$setProp(_el$29, "zIndex", 2600);
+            _$setProp(_el$29, "onMouseDrag", event => updateDrag(event));
+            _$setProp(_el$29, "onMouseDragEnd", () => endDrag());
+            _$setProp(_el$29, "onMouseUp", () => endDrag());
+            return _el$29;
+          }
+        });
       }
     }), null);
     _$effect(_p$ => {
@@ -1155,15 +1189,15 @@ function McpStatus(props) {
       return servers().length > 0;
     },
     get children() {
-      var _el$36 = _$createElement("text");
-      _$setProp(_el$36, "selectable", false);
-      _$setProp(_el$36, "onMouseUp", () => context.keymap?.dispatch?.("mcp.list"));
-      _$insert(_el$36, (() => {
+      var _el$37 = _$createElement("text");
+      _$setProp(_el$37, "selectable", false);
+      _$setProp(_el$37, "onMouseUp", () => context.keymap?.dispatch?.("mcp.list"));
+      _$insert(_el$37, (() => {
         var _c$ = _$memo(() => failed().length > 0);
         return () => _c$() ? `MCP ${failed().length} failed` : `MCP ${connected().length}`;
       })());
-      _$effect(_$p => _$setProp(_el$36, "fg", failed().length > 0 ? context.theme.text.feedback?.error?.base ?? context.theme.text.base : connected().length > 0 ? context.theme.text.feedback?.success?.base ?? context.theme.text.muted : context.theme.text.muted, _$p));
-      return _el$36;
+      _$effect(_$p => _$setProp(_el$37, "fg", failed().length > 0 ? context.theme.text.feedback?.error?.base ?? context.theme.text.base : connected().length > 0 ? context.theme.text.feedback?.success?.base ?? context.theme.text.muted : context.theme.text.muted, _$p));
+      return _el$37;
     }
   });
 }
@@ -1182,25 +1216,25 @@ function HomeSidebar(props) {
       return _$memo(() => route()?.type === "home")() && width() >= 120;
     },
     get children() {
-      var _el$37 = _$createElement("box"),
-        _el$38 = _$createElement("scrollbox");
-      _$insertNode(_el$37, _el$38);
-      _$setProp(_el$37, "position", "absolute");
-      _$setProp(_el$37, "top", 1);
-      _$setProp(_el$37, "right", 0);
-      _$setProp(_el$37, "bottom", 0);
-      _$setProp(_el$37, "width", 44);
-      _$setProp(_el$37, "paddingLeft", 1);
-      _$setProp(_el$37, "paddingRight", 1);
-      _$setProp(_el$38, "flexGrow", 1);
-      _$setProp(_el$38, "minHeight", 0);
-      _$setProp(_el$38, "width", "100%");
-      _$setProp(_el$38, "verticalScrollbarOptions", {
+      var _el$38 = _$createElement("box"),
+        _el$39 = _$createElement("scrollbox");
+      _$insertNode(_el$38, _el$39);
+      _$setProp(_el$38, "position", "absolute");
+      _$setProp(_el$38, "top", 1);
+      _$setProp(_el$38, "right", 0);
+      _$setProp(_el$38, "bottom", 0);
+      _$setProp(_el$38, "width", 44);
+      _$setProp(_el$38, "paddingLeft", 1);
+      _$setProp(_el$38, "paddingRight", 1);
+      _$setProp(_el$39, "flexGrow", 1);
+      _$setProp(_el$39, "minHeight", 0);
+      _$setProp(_el$39, "width", "100%");
+      _$setProp(_el$39, "verticalScrollbarOptions", {
         visible: true
       });
-      _$insert(_el$38, () => props.children);
-      _$effect(_$p => _$setProp(_el$37, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
-      return _el$37;
+      _$insert(_el$39, () => props.children);
+      _$effect(_$p => _$setProp(_el$38, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
+      return _el$38;
     }
   });
 }

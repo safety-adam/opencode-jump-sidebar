@@ -1,4 +1,5 @@
 import { Plugin } from "@opencode/plugin/tui"
+import { Portal } from "@opentui/solid"
 import { For, Show, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js"
 import { mkdirSync, readFileSync, readdirSync, appendFileSync } from "node:fs"
 import { homedir } from "node:os"
@@ -816,6 +817,7 @@ function SessionsByProject(props: {
     targetKey: string
     targetIndex: number
   }>()
+  const [dragActive, setDragActive] = createSignal(false)
   let drag:
     | {
         sessionID: string
@@ -928,6 +930,7 @@ function SessionsByProject(props: {
       targetKey: target.group.key,
       targetIndex: target.index,
     })
+    setDragActive(true)
   }
 
   const endDrag = () => {
@@ -935,6 +938,7 @@ function SessionsByProject(props: {
     drag = undefined
     setDropTarget(undefined)
     setPreview(undefined)
+    setDragActive(false)
     if (!current || !current.target) return
     suppressOpenUntil = Date.now() + 300
     const source = groups().find((group) => group.key === current.sourceKey)
@@ -1003,7 +1007,6 @@ function SessionsByProject(props: {
       paddingTop={1}
       gap={1}
       onMouseDrag={(event: any) => updateDrag(event)}
-      onMouseDragEnd={endDrag}
       onMouseUp={() => endDrag()}
     >
       <TodoPanel
@@ -1071,6 +1074,7 @@ function SessionsByProject(props: {
                   minWidth={0}
                   onMouseUp={(e: any) => {
                     if (e?.button !== 0) return
+                    if (Date.now() < suppressOpenUntil) return
                     props.toggle(group.key)
                   }}
                 >
@@ -1092,6 +1096,7 @@ function SessionsByProject(props: {
                   flexShrink={0}
                   onMouseUp={(e: any) => {
                     if (e?.button !== 0) return
+                    if (Date.now() < suppressOpenUntil) return
                     e.stopPropagation?.()
                     props.createSession(group.dir)
                   }}
@@ -1133,6 +1138,29 @@ function SessionsByProject(props: {
           )
         }}
       </For>
+      <Show when={dragActive()}>
+        <Portal
+          ref={(container: any) => {
+            if (!container) return
+            container.position = "absolute"
+            container.left = 0
+            container.top = 0
+            container.zIndex = 2600
+          }}
+        >
+          <box
+            position="absolute"
+            left={0}
+            top={0}
+            width="100%"
+            height="100%"
+            zIndex={2600}
+            onMouseDrag={(event: any) => updateDrag(event)}
+            onMouseDragEnd={() => endDrag()}
+            onMouseUp={() => endDrag()}
+          />
+        </Portal>
+      </Show>
     </box>
   )
 }
