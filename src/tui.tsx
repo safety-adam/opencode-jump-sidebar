@@ -259,18 +259,18 @@ function TodoPanel(props: {
     <Show when={todos().length > 0}>
       <box flexDirection="column" gap={0} paddingRight={1}>
         <box flexDirection="row" gap={1}>
-          <text fg={context.theme.text.base} attributes={1}>
+          <text selectable={false} fg={context.theme.text.base} attributes={1}>
             Todos
           </text>
-          <text fg={context.theme.text.faint}>{`${done()}/${todos().length}`}</text>
+          <text selectable={false} fg={context.theme.text.faint}>{`${done()}/${todos().length}`}</text>
         </box>
         <For each={todos()}>
           {(todo) => (
             <box flexDirection="row" gap={1}>
-              <text fg={color(todo.status)} flexShrink={0}>
+              <text selectable={false} fg={color(todo.status)} flexShrink={0}>
                 {TODO_ICON[todo.status] ?? "[ ]"}
               </text>
-              <text
+              <text selectable={false}
                 fg={color(todo.status)}
                 attributes={todo.status === "cancelled" ? 128 : 0}
                 wrapMode="word"
@@ -510,20 +510,20 @@ function SessionRow(props: {
         props.onOpen?.()
       }}
     >
-      <text fg={iconColor()} flexShrink={0}>
+      <text selectable={false} fg={iconColor()} flexShrink={0}>
         {icon()}
       </text>
       <Show when={props.decoration?.dot}>
-        <text fg={dotColor()} flexShrink={0}>
+        <text selectable={false} fg={dotColor()} flexShrink={0}>
           {"●"}
         </text>
       </Show>
       <Show when={props.decoration?.label}>
-        <text fg={context.theme.text.muted} flexShrink={0}>
+        <text selectable={false} fg={context.theme.text.muted} flexShrink={0}>
           {props.decoration?.label}
         </text>
       </Show>
-      <text
+      <text selectable={false}
         fg={titleColor()}
         attributes={active() ? 1 : 0}
         wrapMode="none"
@@ -665,7 +665,7 @@ function SessionContextMenu(props: {
                 item.run()
               }}
             >
-              <text fg={context.theme.text.base} wrapMode="none" truncate>
+              <text selectable={false} fg={context.theme.text.base} wrapMode="none" truncate>
                 {item.label}
               </text>
             </box>
@@ -750,7 +750,7 @@ function ProjectContextMenu(props: {
           run()
         }}
       >
-        <text fg={context.theme.text.base} wrapMode="none" truncate>
+        <text selectable={false} fg={context.theme.text.base} wrapMode="none" truncate>
           {label()}
         </text>
       </box>
@@ -972,7 +972,7 @@ function SessionsByProject(props: {
         revision={props.revision}
       />
       <box flexDirection="row" paddingRight={1}>
-        <text
+        <text selectable={false}
           fg={context.theme.text.base}
           attributes={1}
           flexGrow={1}
@@ -983,7 +983,7 @@ function SessionsByProject(props: {
           Jump to session
         </text>
         <box flexDirection="row" gap={1} flexShrink={0}>
-          <text
+          <text selectable={false}
             fg={
               props.showArchived()
                 ? context.theme.hue?.orange?.[200] ?? context.theme.text.base
@@ -993,7 +993,7 @@ function SessionsByProject(props: {
           >
             ≡
           </text>
-          <text
+          <text selectable={false}
             fg={context.theme.text.muted}
             onMouseUp={() => props.newProject()}
           >
@@ -1034,10 +1034,10 @@ function SessionsByProject(props: {
                     props.toggle(group.key)
                   }}
                 >
-                  <text fg={context.theme.text.muted} flexShrink={0}>
+                  <text selectable={false} fg={context.theme.text.muted} flexShrink={0}>
                     {isCollapsed() ? "▶" : "▼"}
                   </text>
-                  <text
+                  <text selectable={false}
                     fg={context.theme.text.base}
                     wrapMode="none"
                     truncate
@@ -1047,7 +1047,7 @@ function SessionsByProject(props: {
                     {`${group.label} (${group.rows.length})`}
                   </text>
                 </box>
-                <text
+                <text selectable={false}
                   fg={context.theme.text.base}
                   flexShrink={0}
                   onMouseUp={(e: any) => {
@@ -1111,7 +1111,7 @@ function McpStatus(props: { context: any }) {
 
   return (
     <Show when={servers().length > 0}>
-      <text
+      <text selectable={false}
         fg={
           failed().length > 0
             ? context.theme.text.feedback?.error?.base ?? context.theme.text.base

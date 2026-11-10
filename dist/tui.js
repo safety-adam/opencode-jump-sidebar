@@ -264,7 +264,9 @@ function TodoPanel(props) {
       _$setProp(_el$2, "flexDirection", "row");
       _$setProp(_el$2, "gap", 1);
       _$insertNode(_el$3, _$createTextNode(`Todos`));
+      _$setProp(_el$3, "selectable", false);
       _$setProp(_el$3, "attributes", 1);
+      _$setProp(_el$5, "selectable", false);
       _$insert(_el$5, () => `${done()}/${todos().length}`);
       _$insert(_el$, _$createComponent(For, {
         get each() {
@@ -278,8 +280,10 @@ function TodoPanel(props) {
           _$insertNode(_el$6, _el$8);
           _$setProp(_el$6, "flexDirection", "row");
           _$setProp(_el$6, "gap", 1);
+          _$setProp(_el$7, "selectable", false);
           _$setProp(_el$7, "flexShrink", 0);
           _$insert(_el$7, () => TODO_ICON[todo.status] ?? "[ ]");
+          _$setProp(_el$8, "selectable", false);
           _$setProp(_el$8, "wrapMode", "word");
           _$setProp(_el$8, "flexGrow", 1);
           _$setProp(_el$8, "minWidth", 0);
@@ -490,6 +494,7 @@ function SessionRow(props) {
       if (e?.button !== 0) return;
       props.onOpen?.();
     });
+    _$setProp(_el$0, "selectable", false);
     _$setProp(_el$0, "flexShrink", 0);
     _$insert(_el$0, icon);
     _$insert(_el$9, _$createComponent(Show, {
@@ -499,6 +504,7 @@ function SessionRow(props) {
       get children() {
         var _el$1 = _$createElement("text");
         _$insertNode(_el$1, _$createTextNode(`●`));
+        _$setProp(_el$1, "selectable", false);
         _$setProp(_el$1, "flexShrink", 0);
         _$effect(_$p => _$setProp(_el$1, "fg", dotColor(), _$p));
         return _el$1;
@@ -510,12 +516,14 @@ function SessionRow(props) {
       },
       get children() {
         var _el$11 = _$createElement("text");
+        _$setProp(_el$11, "selectable", false);
         _$setProp(_el$11, "flexShrink", 0);
         _$insert(_el$11, () => props.decoration?.label);
         _$effect(_$p => _$setProp(_el$11, "fg", context.theme.text.muted, _$p));
         return _el$11;
       }
     }), _el$12);
+    _$setProp(_el$12, "selectable", false);
     _$setProp(_el$12, "wrapMode", "none");
     _$setProp(_el$12, "truncate", true);
     _$setProp(_el$12, "flexGrow", 1);
@@ -637,6 +645,7 @@ function SessionContextMenu(props) {
           props.onClose();
           item.run();
         });
+        _$setProp(_el$16, "selectable", false);
         _$setProp(_el$16, "wrapMode", "none");
         _$setProp(_el$16, "truncate", true);
         _$insert(_el$16, () => item.label);
@@ -736,6 +745,7 @@ function ProjectContextMenu(props) {
       if (e?.button !== 0) return;
       run();
     });
+    _$setProp(_el$19, "selectable", false);
     _$setProp(_el$19, "wrapMode", "none");
     _$setProp(_el$19, "truncate", true);
     _$insert(_el$19, label);
@@ -944,6 +954,7 @@ function SessionsByProject(props) {
     _$setProp(_el$21, "flexDirection", "row");
     _$setProp(_el$21, "paddingRight", 1);
     _$insertNode(_el$22, _$createTextNode(`Jump to session`));
+    _$setProp(_el$22, "selectable", false);
     _$setProp(_el$22, "attributes", 1);
     _$setProp(_el$22, "flexGrow", 1);
     _$setProp(_el$22, "minWidth", 0);
@@ -955,8 +966,10 @@ function SessionsByProject(props) {
     _$setProp(_el$24, "gap", 1);
     _$setProp(_el$24, "flexShrink", 0);
     _$insertNode(_el$25, _$createTextNode(`≡`));
+    _$setProp(_el$25, "selectable", false);
     _$setProp(_el$25, "onMouseUp", () => props.toggleArchived());
     _$insertNode(_el$27, _$createTextNode(`+`));
+    _$setProp(_el$27, "selectable", false);
     _$setProp(_el$27, "onMouseUp", () => props.newProject());
     _$insert(_el$20, _$createComponent(For, {
       get each() {
@@ -995,14 +1008,17 @@ function SessionsByProject(props) {
             if (e?.button !== 0) return;
             props.toggle(group.key);
           });
+          _$setProp(_el$32, "selectable", false);
           _$setProp(_el$32, "flexShrink", 0);
           _$insert(_el$32, () => isCollapsed() ? "▶" : "▼");
+          _$setProp(_el$33, "selectable", false);
           _$setProp(_el$33, "wrapMode", "none");
           _$setProp(_el$33, "truncate", true);
           _$setProp(_el$33, "flexGrow", 1);
           _$setProp(_el$33, "minWidth", 0);
           _$insert(_el$33, () => `${group.label} (${group.rows.length})`);
           _$insertNode(_el$34, _$createTextNode(`+`));
+          _$setProp(_el$34, "selectable", false);
           _$setProp(_el$34, "flexShrink", 0);
           _$setProp(_el$34, "onMouseUp", e => {
             if (e?.button !== 0) return;
@@ -1106,6 +1122,7 @@ function McpStatus(props) {
     },
     get children() {
       var _el$36 = _$createElement("text");
+      _$setProp(_el$36, "selectable", false);
       _$setProp(_el$36, "onMouseUp", () => context.keymap?.dispatch?.("mcp.list"));
       _$insert(_el$36, (() => {
         var _c$ = _$memo(() => failed().length > 0);
