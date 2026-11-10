@@ -348,9 +348,15 @@ function SessionRow(props: {
   unread?: boolean
   current?: boolean
   decoration?: Decoration
-  onToggleArchive?: () => void
   localUnread?: boolean
   onToggleUnread?: () => void
+  onOpenMenu?: (state: {
+    session: any
+    x: number
+    y: number
+    archived: boolean
+    unread: boolean
+  }) => void
   childMap?: () => Map<string, any[]>
 }) {
   const context = props.context
@@ -459,7 +465,24 @@ function SessionRow(props: {
   }
 
   return (
-    <box flexDirection="row" gap={1} paddingRight={1} backgroundColor={rowBg()}>
+    <box
+      flexDirection="row"
+      gap={1}
+      paddingRight={1}
+      backgroundColor={rowBg()}
+      onMouseUp={(e: any) => {
+        if (e?.button !== 2) return
+        e.preventDefault?.()
+        e.stopPropagation?.()
+        props.onOpenMenu?.({
+          session: props.session,
+          x: e.x ?? 0,
+          y: e.y ?? 0,
+          archived: isArchived(props.session),
+          unread: props.localUnread === true,
+        })
+      }}
+    >
       <text fg={iconColor()} flexShrink={0}>
         {icon()}
       </text>
@@ -480,37 +503,138 @@ function SessionRow(props: {
         truncate
         flexGrow={1}
         minWidth={0}
-        onMouseUp={() => {
+        onMouseUp={(e: any) => {
+          if (e?.button !== 0) return
           if (props.localUnread) props.onToggleUnread?.()
           context.ui.router.navigate({ type: "session", sessionID: props.session.id })
         }}
       >
         {displayTitle(props.session)}
       </text>
-      <text
-        fg={
-          props.localUnread
-            ? context.theme.hue?.purple?.[200] ?? context.theme.text.base
-            : context.theme.text.muted
-        }
-        flexShrink={0}
-        onMouseUp={(e: any) => {
+    </box>
+  )
+}
+
+type SessionMenuState = {
+  session: any
+  x: number
+  y: number
+  archived: boolean
+  unread: boolean
+}
+
+// Right-click menu for a session row. The renderer reports the secondary button
+// as 2 and the click position in screen cells.
+function SessionContextMenu(props: {
+  context: any
+  state: SessionMenuState
+  onClose: () => void
+  onArchive: (sessionID: string) => void
+  onUnread: (sessionID: string) => void
+}) {
+  const context = props.context
+  const [selected, setSelected] = createSignal(0)
+  const width = 18
+  const items = () => [
+    {
+      label: props.state.archived ? "Unarchive" : "Archive",
+      run: () => props.onArchive(props.state.session.id),
+    },
+    {
+      label: props.state.unread ? "Mark read" : "Mark unread",
+      run: () => props.onUnread(props.state.session.id),
+    },
+  ]
+  const dims = () => ({
+    width: context.renderer?.width ?? 80,
+    height: context.renderer?.height ?? 24,
+  })
+  const left = () => Math.max(0, Math.min(props.state.x, dims().width - width))
+  const top = () =>
+    Math.max(0, Math.min(props.state.y + 1, dims().height - 1 - items().length))
+  const runSelected = () => {
+    const item = items()[selected()]
+    props.onClose()
+    item?.run()
+  }
+
+  try {
+    const pop = context.keymap?.mode?.push?.("menu")
+    if (pop) onCleanup(pop)
+  } catch {}
+  try {
+    context.keymap?.layer?.(() => ({
+      mode: "menu",
+      commands: [
+        { bind: "escape,ctrl+c", title: "Close session menu", run: () => props.onClose() },
+        {
+          bind: "up",
+          title: "Previous menu item",
+          run: () => setSelected((index) => (index - 1 + items().length) % items().length),
+        },
+        {
+          bind: "down",
+          title: "Next menu item",
+          run: () => setSelected((index) => (index + 1) % items().length),
+        },
+        { bind: "return", title: "Run menu item", run: runSelected },
+      ],
+    }))
+  } catch {}
+
+  const background = context.theme.background?.raised?.high ?? context.theme.background?.element
+  const hovered = context.theme.background?.action?.primary?.hovered ?? background
+
+  return (
+    <box
+      position="absolute"
+      left={0}
+      top={0}
+      width="100%"
+      height="100%"
+      zIndex={2600}
+      onMouseDown={(e: any) => {
+        e?.preventDefault?.()
+        e?.stopPropagation?.()
+        props.onClose()
+      }}
+    >
+      <box
+        position="absolute"
+        left={left()}
+        top={top()}
+        width={width}
+        height={items().length}
+        flexDirection="column"
+        backgroundColor={background}
+        onMouseDown={(e: any) => {
+          e?.preventDefault?.()
           e?.stopPropagation?.()
-          props.onToggleUnread?.()
         }}
       >
-        {props.localUnread ? "●" : "·"}
-      </text>
-      <text
-        fg={context.theme.text.muted}
-        flexShrink={0}
-        onMouseUp={(e: any) => {
-          e?.stopPropagation?.()
-          props.onToggleArchive?.()
-        }}
-      >
-        {isArchived(props.session) ? "⇡" : "⇣"}
-      </text>
+        <For each={items()}>
+          {(item, index) => (
+            <box
+              height={1}
+              paddingLeft={1}
+              paddingRight={1}
+              backgroundColor={index() === selected() ? hovered : background}
+              onMouseOver={() => setSelected(index())}
+              onMouseUp={(e: any) => {
+                e?.preventDefault?.()
+                e?.stopPropagation?.()
+                if (e?.button !== 0) return
+                props.onClose()
+                item.run()
+              }}
+            >
+              <text fg={context.theme.text.base} wrapMode="none" truncate>
+                {item.label}
+              </text>
+            </box>
+          )}
+        </For>
+      </box>
     </box>
   )
 }
@@ -529,7 +653,7 @@ function SessionsByProject(props: {
   toggleArchived: () => void
   createSession: (dir?: string) => void
   newProject: () => void
-  toggleArchive: (id: string) => void
+  openMenu: (state: SessionMenuState) => void
   toggleProjectArchive: (project: any) => void
   unreadLocal: () => Record<string, boolean>
   toggleUnread: (id: string) => void
@@ -663,7 +787,7 @@ function SessionsByProject(props: {
                       }
                       current={session.id === props.sessionID}
                       decoration={props.decorations()[session.id]}
-                      onToggleArchive={() => props.toggleArchive(session.id)}
+                      onOpenMenu={props.openMenu}
                       localUnread={props.unreadLocal()[session.id] === true}
                       onToggleUnread={() => props.toggleUnread(session.id)}
                       childMap={childMap}
@@ -1147,6 +1271,12 @@ export default Plugin.define({
         })
     }
 
+    // Right-click menu shared by every session row. The row reports the click
+    // and the state; the actions live here.
+    const [sessionMenu, setSessionMenu] = createSignal<SessionMenuState>()
+    const openSessionMenu = (state: SessionMenuState) => setSessionMenu(state)
+    const closeSessionMenu = () => setSessionMenu(undefined)
+
     // Session navigation history for the history keybinds. OpenCode declares
     // session.tab.history.back and session.tab.history.forward but ships no command
     // behind either one, so the plugin supplies them. The stack is in memory and
@@ -1325,7 +1455,7 @@ export default Plugin.define({
         toggleArchived={toggleArchived}
         createSession={createSession}
         newProject={newProject}
-        toggleArchive={toggleArchive}
+        openMenu={openSessionMenu}
         toggleProjectArchive={toggleProjectArchive}
         unreadLocal={unreadLocal}
         toggleUnread={toggleUnread}
@@ -1363,6 +1493,29 @@ export default Plugin.define({
           context={context}
           onVisit={(sessionID) => historyRecord(historyRoot(sessionID))}
         />
+      ),
+    })
+
+    context.ui.slot({
+      append: "app",
+      render: () => (
+        <Show when={sessionMenu()} keyed>
+          {(state) => (
+            <SessionContextMenu
+              context={context}
+              state={state}
+              onClose={closeSessionMenu}
+              onArchive={(sessionID) => {
+                closeSessionMenu()
+                void toggleArchive(sessionID)
+              }}
+              onUnread={(sessionID) => {
+                closeSessionMenu()
+                toggleUnread(sessionID)
+              }}
+            />
+          )}
+        </Show>
       ),
     })
 
