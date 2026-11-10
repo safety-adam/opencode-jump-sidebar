@@ -85,7 +85,7 @@ The session sidebar gets a **Todos** section above the **Jump to session** secti
 - sessions within a project keep a manual order. New sessions sit at the top until you drag them;
 - a status icon per session. An orange spinner means working, `!` a pending permission, `?` a pending question, `●` unread;
 - click a session to open it, `+` next to a project to create a session in it;
-- drag a session up or down to reorder it, or onto another project to move it there. The order is stored on this machine;
+- drag a session up or down to reorder it, or onto another project to move it there. The list follows the pointer as you drag, and the order is stored on this machine;
 - click `+` on the **Jump to session** heading to create a new project. A prompt asks for the name, then it creates the folder under the configured `root` and a seeded session, the same result as `/new-project`;
 - right-click a session for a menu with Archive or Unarchive, Mark unread or Mark read, and Move to... which opens a project picker. Archiving uses the same title convention as `/archive`;
 - right-click a project for Archive project or Unarchive project. A confirmation asks first. Archiving a project also archives every session in it that is not already archived. Archived projects are hidden unless `≡` is on;

@@ -530,7 +530,7 @@ function SessionRow(props) {
     _$setProp(_el$12, "minWidth", 0);
     _$insert(_el$12, () => displayTitle(props.session));
     _$effect(_p$ => {
-      var _v$6 = props.drop ? context.theme.background?.action?.primary?.hovered ?? context.theme.background?.element : rowBg(),
+      var _v$6 = props.dragging ? context.theme.background?.action?.primary?.selected ?? context.theme.background?.element : props.drop ? context.theme.background?.action?.primary?.hovered ?? context.theme.background?.element : rowBg(),
         _v$7 = iconColor(),
         _v$8 = titleColor(),
         _v$9 = active() ? 1 : 0;
@@ -786,6 +786,7 @@ function SessionsByProject(props) {
     return map;
   });
   const [dropTarget, setDropTarget] = createSignal();
+  const [preview, setPreview] = createSignal();
   let drag;
   let suppressOpenUntil = 0;
 
@@ -818,6 +819,33 @@ function SessionsByProject(props) {
       line = end + 2;
     }
     return entries;
+  };
+
+  // Rows to render for a group. While dragging, the affected groups show the
+  // dragged session at the pointer position so the list updates live.
+  const rowsFor = group => {
+    const p = preview();
+    if (!p) return group.rows;
+    if (group.key !== p.sourceKey && group.key !== p.targetKey) return group.rows;
+    const source = groups().find(item => item.key === p.sourceKey);
+    const session = source?.rows.find(row => row.id === p.sessionID);
+    if (!session) return group.rows;
+    if (group.key === p.sourceKey && group.key === p.targetKey) {
+      const from = group.rows.findIndex(row => row.id === p.sessionID);
+      const rows = group.rows.filter(row => row.id !== p.sessionID);
+      let insert = p.targetIndex;
+      if (from !== -1 && from < p.targetIndex) insert -= 1;
+      insert = Math.max(0, Math.min(insert, rows.length));
+      rows.splice(insert, 0, session);
+      return rows;
+    }
+    if (group.key === p.sourceKey) {
+      return group.rows.filter(row => row.id !== p.sessionID);
+    }
+    const rows = [...group.rows];
+    const insert = Math.max(0, Math.min(p.targetIndex, rows.length));
+    rows.splice(insert, 0, session);
+    return rows;
   };
   const beginDrag = (session, group, event) => {
     if (event?.button !== 0) return;
@@ -872,11 +900,18 @@ function SessionsByProject(props) {
       index: target.index,
       group: target.groupTarget
     });
+    setPreview({
+      sessionID: drag.sessionID,
+      sourceKey: drag.sourceKey,
+      targetKey: target.group.key,
+      targetIndex: target.index
+    });
   };
   const endDrag = () => {
     const current = drag;
     drag = undefined;
     setDropTarget(undefined);
+    setPreview(undefined);
     if (!current || !current.target) return;
     suppressOpenUntil = Date.now() + 300;
     const source = groups().find(group => group.key === current.sourceKey);
@@ -1016,7 +1051,7 @@ function SessionsByProject(props) {
           _$setProp(_el$33, "truncate", true);
           _$setProp(_el$33, "flexGrow", 1);
           _$setProp(_el$33, "minWidth", 0);
-          _$insert(_el$33, () => `${group.label} (${group.rows.length})`);
+          _$insert(_el$33, () => `${group.label} (${rowsFor(group).length})`);
           _$insertNode(_el$34, _$createTextNode(`+`));
           _$setProp(_el$34, "selectable", false);
           _$setProp(_el$34, "flexShrink", 0);
@@ -1032,7 +1067,7 @@ function SessionsByProject(props) {
             get children() {
               return _$createComponent(For, {
                 get each() {
-                  return group.rows;
+                  return rowsFor(group);
                 },
                 children: (session, index) => _$createComponent(SessionRow, {
                   context: context,
@@ -1060,6 +1095,9 @@ function SessionsByProject(props) {
                   onDragStart: event => beginDrag(session, group, event),
                   onDrag: event => updateDrag(event),
                   onDragEnd: endDrag,
+                  get dragging() {
+                    return preview()?.sessionID === session.id;
+                  },
                   get drop() {
                     return _$memo(() => !!(dropTarget()?.groupKey === group.key && !dropTarget()?.group))() && dropTarget()?.index === index();
                   },

@@ -372,6 +372,7 @@ function SessionRow(props: {
   onDrag?: (event: any) => void
   onDragEnd?: (event: any) => void
   drop?: boolean
+  dragging?: boolean
   childMap?: () => Map<string, any[]>
 }) {
   const context = props.context
@@ -485,10 +486,13 @@ function SessionRow(props: {
       gap={1}
       paddingRight={1}
       backgroundColor={
-        props.drop
-          ? context.theme.background?.action?.primary?.hovered ??
+        props.dragging
+          ? context.theme.background?.action?.primary?.selected ??
             context.theme.background?.element
-          : rowBg()
+          : props.drop
+            ? context.theme.background?.action?.primary?.hovered ??
+              context.theme.background?.element
+            : rowBg()
       }
       onMouseDown={(e: any) => props.onDragStart?.(e)}
       onMouseDrag={(e: any) => props.onDrag?.(e)}
@@ -810,6 +814,12 @@ function SessionsByProject(props: {
     index: number
     group: boolean
   }>()
+  const [preview, setPreview] = createSignal<{
+    sessionID: string
+    sourceKey: string
+    targetKey: string
+    targetIndex: number
+  }>()
   let drag:
     | {
         sessionID: string
@@ -845,6 +855,33 @@ function SessionsByProject(props: {
       line = end + 2
     }
     return entries
+  }
+
+  // Rows to render for a group. While dragging, the affected groups show the
+  // dragged session at the pointer position so the list updates live.
+  const rowsFor = (group: any) => {
+    const p = preview()
+    if (!p) return group.rows
+    if (group.key !== p.sourceKey && group.key !== p.targetKey) return group.rows
+    const source = groups().find((item) => item.key === p.sourceKey)
+    const session = source?.rows.find((row: any) => row.id === p.sessionID)
+    if (!session) return group.rows
+    if (group.key === p.sourceKey && group.key === p.targetKey) {
+      const from = group.rows.findIndex((row: any) => row.id === p.sessionID)
+      const rows = group.rows.filter((row: any) => row.id !== p.sessionID)
+      let insert = p.targetIndex
+      if (from !== -1 && from < p.targetIndex) insert -= 1
+      insert = Math.max(0, Math.min(insert, rows.length))
+      rows.splice(insert, 0, session)
+      return rows
+    }
+    if (group.key === p.sourceKey) {
+      return group.rows.filter((row: any) => row.id !== p.sessionID)
+    }
+    const rows = [...group.rows]
+    const insert = Math.max(0, Math.min(p.targetIndex, rows.length))
+    rows.splice(insert, 0, session)
+    return rows
   }
 
   const beginDrag = (session: any, group: any, event: any) => {
@@ -889,12 +926,19 @@ function SessionsByProject(props: {
       index: target.index,
       group: target.groupTarget,
     })
+    setPreview({
+      sessionID: drag.sessionID,
+      sourceKey: drag.sourceKey,
+      targetKey: target.group.key,
+      targetIndex: target.index,
+    })
   }
 
   const endDrag = () => {
     const current = drag
     drag = undefined
     setDropTarget(undefined)
+    setPreview(undefined)
     if (!current || !current.target) return
     suppressOpenUntil = Date.now() + 300
     const source = groups().find((group) => group.key === current.sourceKey)
@@ -1044,7 +1088,7 @@ function SessionsByProject(props: {
                     flexGrow={1}
                     minWidth={0}
                   >
-                    {`${group.label} (${group.rows.length})`}
+                    {`${group.label} (${rowsFor(group).length})`}
                   </text>
                 </box>
                 <text selectable={false}
@@ -1060,7 +1104,7 @@ function SessionsByProject(props: {
                 </text>
               </box>
               <Show when={!isCollapsed()}>
-                <For each={group.rows}>
+                <For each={rowsFor(group)}>
                   {(session: any, index) => (
                     <SessionRow
                       context={context}
@@ -1079,6 +1123,7 @@ function SessionsByProject(props: {
                       onDragStart={(event: any) => beginDrag(session, group, event)}
                       onDrag={(event: any) => updateDrag(event)}
                       onDragEnd={endDrag}
+                      dragging={preview()?.sessionID === session.id}
                       drop={
                         dropTarget()?.groupKey === group.key &&
                         !dropTarget()?.group &&
