@@ -924,7 +924,6 @@ function SessionsByProject(props) {
       sessionID: session.id
     });
   };
-  const insertColor = () => context.theme.hue?.accent?.[500] ?? context.theme.text.feedback?.info?.base;
   return (() => {
     var _el$20 = _$createElement("box"),
       _el$21 = _$createElement("box"),
@@ -1031,21 +1030,11 @@ function SessionsByProject(props) {
               return !isCollapsed();
             },
             get children() {
-              return [_$createComponent(For, {
+              return _$createComponent(For, {
                 get each() {
                   return group.rows;
                 },
-                children: (session, index) => [_$createComponent(Show, {
-                  get when() {
-                    return _$memo(() => !!(dropTarget()?.groupKey === group.key && !dropTarget()?.group))() && dropTarget()?.index === index();
-                  },
-                  get children() {
-                    var _el$37 = _$createElement("box");
-                    _$setProp(_el$37, "height", 1);
-                    _$effect(_$p => _$setProp(_el$37, "backgroundColor", insertColor(), _$p));
-                    return _el$37;
-                  }
-                }), _$createComponent(SessionRow, {
+                children: (session, index) => _$createComponent(SessionRow, {
                   context: context,
                   session: session,
                   frame: frame,
@@ -1076,18 +1065,8 @@ function SessionsByProject(props) {
                     return props.unreadLocal()[session.id] === true;
                   },
                   childMap: childMap
-                })]
-              }), _$createComponent(Show, {
-                get when() {
-                  return _$memo(() => !!(dropTarget()?.groupKey === group.key && !dropTarget()?.group))() && dropTarget()?.index === group.rows.length;
-                },
-                get children() {
-                  var _el$36 = _$createElement("box");
-                  _$setProp(_el$36, "height", 1);
-                  _$effect(_$p => _$setProp(_el$36, "backgroundColor", insertColor(), _$p));
-                  return _el$36;
-                }
-              })];
+                })
+              });
             }
           }), null);
           _$effect(_p$ => {
@@ -1140,15 +1119,15 @@ function McpStatus(props) {
       return servers().length > 0;
     },
     get children() {
-      var _el$38 = _$createElement("text");
-      _$setProp(_el$38, "selectable", false);
-      _$setProp(_el$38, "onMouseUp", () => context.keymap?.dispatch?.("mcp.list"));
-      _$insert(_el$38, (() => {
+      var _el$36 = _$createElement("text");
+      _$setProp(_el$36, "selectable", false);
+      _$setProp(_el$36, "onMouseUp", () => context.keymap?.dispatch?.("mcp.list"));
+      _$insert(_el$36, (() => {
         var _c$ = _$memo(() => failed().length > 0);
         return () => _c$() ? `MCP ${failed().length} failed` : `MCP ${connected().length}`;
       })());
-      _$effect(_$p => _$setProp(_el$38, "fg", failed().length > 0 ? context.theme.text.feedback?.error?.base ?? context.theme.text.base : connected().length > 0 ? context.theme.text.feedback?.success?.base ?? context.theme.text.muted : context.theme.text.muted, _$p));
-      return _el$38;
+      _$effect(_$p => _$setProp(_el$36, "fg", failed().length > 0 ? context.theme.text.feedback?.error?.base ?? context.theme.text.base : connected().length > 0 ? context.theme.text.feedback?.success?.base ?? context.theme.text.muted : context.theme.text.muted, _$p));
+      return _el$36;
     }
   });
 }
@@ -1167,25 +1146,25 @@ function HomeSidebar(props) {
       return _$memo(() => route()?.type === "home")() && width() >= 120;
     },
     get children() {
-      var _el$39 = _$createElement("box"),
-        _el$40 = _$createElement("scrollbox");
-      _$insertNode(_el$39, _el$40);
-      _$setProp(_el$39, "position", "absolute");
-      _$setProp(_el$39, "top", 1);
-      _$setProp(_el$39, "right", 0);
-      _$setProp(_el$39, "bottom", 0);
-      _$setProp(_el$39, "width", 44);
-      _$setProp(_el$39, "paddingLeft", 1);
-      _$setProp(_el$39, "paddingRight", 1);
-      _$setProp(_el$40, "flexGrow", 1);
-      _$setProp(_el$40, "minHeight", 0);
-      _$setProp(_el$40, "width", "100%");
-      _$setProp(_el$40, "verticalScrollbarOptions", {
+      var _el$37 = _$createElement("box"),
+        _el$38 = _$createElement("scrollbox");
+      _$insertNode(_el$37, _el$38);
+      _$setProp(_el$37, "position", "absolute");
+      _$setProp(_el$37, "top", 1);
+      _$setProp(_el$37, "right", 0);
+      _$setProp(_el$37, "bottom", 0);
+      _$setProp(_el$37, "width", 44);
+      _$setProp(_el$37, "paddingLeft", 1);
+      _$setProp(_el$37, "paddingRight", 1);
+      _$setProp(_el$38, "flexGrow", 1);
+      _$setProp(_el$38, "minHeight", 0);
+      _$setProp(_el$38, "width", "100%");
+      _$setProp(_el$38, "verticalScrollbarOptions", {
         visible: true
       });
-      _$insert(_el$40, () => props.children);
-      _$effect(_$p => _$setProp(_el$39, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
-      return _el$39;
+      _$insert(_el$38, () => props.children);
+      _$effect(_$p => _$setProp(_el$37, "backgroundColor", context.theme.background?.raised?.base ?? context.theme.background?.element, _$p));
+      return _el$37;
     }
   });
 }

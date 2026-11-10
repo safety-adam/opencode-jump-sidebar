@@ -953,9 +953,6 @@ function SessionsByProject(props: {
     context.ui.router.navigate({ type: "session", sessionID: session.id })
   }
 
-  const insertColor = () =>
-    context.theme.hue?.accent?.[500] ?? context.theme.text.feedback?.info?.base
-
   return (
     <box
       flexDirection="column"
@@ -1063,17 +1060,7 @@ function SessionsByProject(props: {
               <Show when={!isCollapsed()}>
                 <For each={group.rows}>
                   {(session: any, index) => (
-                    <>
-                      <Show
-                        when={
-                          dropTarget()?.groupKey === group.key &&
-                          !dropTarget()?.group &&
-                          dropTarget()?.index === index()
-                        }
-                      >
-                        <box height={1} backgroundColor={insertColor()} />
-                      </Show>
-                      <SessionRow
+                    <SessionRow
                         context={context}
                         session={session}
                         frame={frame}
@@ -1096,18 +1083,8 @@ function SessionsByProject(props: {
                         localUnread={props.unreadLocal()[session.id] === true}
                         childMap={childMap}
                       />
-                    </>
                   )}
                 </For>
-                <Show
-                  when={
-                    dropTarget()?.groupKey === group.key &&
-                    !dropTarget()?.group &&
-                    dropTarget()?.index === group.rows.length
-                  }
-                >
-                  <box height={1} backgroundColor={insertColor()} />
-                </Show>
               </Show>
             </box>
           )
