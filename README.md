@@ -82,11 +82,12 @@ The session sidebar gets a **Todos** section above the **Jump to session** secti
 
 - **Todos** shows the open session's list from its last `todowrite` call, with a done count and `[ ]`, `[•]`, `[✓]` or `[-]` per item. It hides while the list is empty, and draws nothing for a session that never wrote one. Requires `experimental.todo` in the OpenCode config, since that is what gives the agent the `todowrite` tool.
 - one collapsible group per project, sorted alphabetically;
-- sessions within a project sorted by last updated;
+- sessions within a project keep a manual order. New sessions sit at the top until you drag them;
 - a status icon per session. An orange spinner means working, `!` a pending permission, `?` a pending question, `●` unread;
 - click a session to open it, `+` next to a project to create a session in it;
+- drag a session up or down to reorder it, or onto another project to move it there. The order is stored on this machine;
 - click `+` on the **Jump to session** heading to create a new project. A prompt asks for the name, then it creates the folder under the configured `root` and a seeded session, the same result as `/new-project`;
-- right-click a session for a menu with Archive or Unarchive and Mark unread or Mark read. Archiving uses the same title convention as `/archive`;
+- right-click a session for a menu with Archive or Unarchive, Mark unread or Mark read, and Move to... which opens a project picker. Archiving uses the same title convention as `/archive`;
 - click `⇣` on a project to archive it, `⇡` to unarchive. A confirmation asks first. Archiving a project also archives every session in it that is not already archived. Archived projects are hidden unless `≡` is on;
 - the unread flag clears when you open the session. It is stored on this machine, so it does not change OpenCode's own unread state or other devices;
 - the `≡` toggle shows or hides archived sessions. A session is archived when its title starts with `[Archived] `;

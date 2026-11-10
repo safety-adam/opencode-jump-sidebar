@@ -295,6 +295,7 @@ function groupSessions(
   sessions: any[],
   projects: any[],
   showArchived: boolean,
+  order: Record<string, string[]>,
 ): { key: string; label: string; dir?: string; rows: any[] }[] {
   const byId = new Map<string, any>(projects.map((p) => [p.id, p]))
   const archivedProjects = new Set(
@@ -332,9 +333,19 @@ function groupSessions(
 
   const out = [...groups.values()]
   for (const g of out) {
-    g.rows.sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0))
+    const ranked = order[g.dir || g.key] ?? []
+    const rank = new Map(ranked.map((id, index) => [id, index]))
+    g.rows.sort((a, b) => {
+      const ra = rank.get(a.id)
+      const rb = rank.get(b.id)
+      if (ra !== undefined && rb !== undefined) return ra - rb
+      // Sessions that are not in the manual order yet are new, so keep them on top.
+      if (ra !== undefined) return 1
+      if (rb !== undefined) return -1
+      return (b.time?.updated ?? 0) - (a.time?.updated ?? 0)
+    })
   }
-  // Projects are sorted alphabetically; sessions within each keep their own order.
+  // Projects are sorted alphabetically; sessions within each keep their manual order.
   out.sort((a, b) => a.label.localeCompare(b.label))
   return out
 }
@@ -349,7 +360,7 @@ function SessionRow(props: {
   current?: boolean
   decoration?: Decoration
   localUnread?: boolean
-  onToggleUnread?: () => void
+  onOpen?: () => void
   onOpenMenu?: (state: {
     session: any
     x: number
@@ -357,6 +368,8 @@ function SessionRow(props: {
     archived: boolean
     unread: boolean
   }) => void
+  onDragStart?: (event: any) => void
+  drop?: boolean
   childMap?: () => Map<string, any[]>
 }) {
   const context = props.context
@@ -469,18 +482,28 @@ function SessionRow(props: {
       flexDirection="row"
       gap={1}
       paddingRight={1}
-      backgroundColor={rowBg()}
+      backgroundColor={
+        props.drop
+          ? context.theme.background?.action?.primary?.hovered ??
+            context.theme.background?.element
+          : rowBg()
+      }
+      onMouseDown={(e: any) => props.onDragStart?.(e)}
       onMouseUp={(e: any) => {
-        if (e?.button !== 2) return
-        e.preventDefault?.()
-        e.stopPropagation?.()
-        props.onOpenMenu?.({
-          session: props.session,
-          x: e.x ?? 0,
-          y: e.y ?? 0,
-          archived: isArchived(props.session),
-          unread: props.localUnread === true,
-        })
+        if (e?.button === 2) {
+          e.preventDefault?.()
+          e.stopPropagation?.()
+          props.onOpenMenu?.({
+            session: props.session,
+            x: e.x ?? 0,
+            y: e.y ?? 0,
+            archived: isArchived(props.session),
+            unread: props.localUnread === true,
+          })
+          return
+        }
+        if (e?.button !== 0) return
+        props.onOpen?.()
       }}
     >
       <text fg={iconColor()} flexShrink={0}>
@@ -503,11 +526,6 @@ function SessionRow(props: {
         truncate
         flexGrow={1}
         minWidth={0}
-        onMouseUp={(e: any) => {
-          if (e?.button !== 0) return
-          if (props.localUnread) props.onToggleUnread?.()
-          context.ui.router.navigate({ type: "session", sessionID: props.session.id })
-        }}
       >
         {displayTitle(props.session)}
       </text>
@@ -523,6 +541,16 @@ type SessionMenuState = {
   unread: boolean
 }
 
+type SessionMoveRequest = {
+  sessionID: string
+  sourceKey: string
+  targetKey: string
+  sourceDir?: string
+  targetDir?: string
+  sourceOrder: string[]
+  targetOrder: string[]
+}
+
 // Right-click menu for a session row. The renderer reports the secondary button
 // as 2 and the click position in screen cells.
 function SessionContextMenu(props: {
@@ -531,10 +559,11 @@ function SessionContextMenu(props: {
   onClose: () => void
   onArchive: (sessionID: string) => void
   onUnread: (sessionID: string) => void
+  onMove: (sessionID: string) => void
 }) {
   const context = props.context
   const [selected, setSelected] = createSignal(0)
-  const width = 18
+  const width = 20
   const items = () => [
     {
       label: props.state.archived ? "Unarchive" : "Archive",
@@ -543,6 +572,10 @@ function SessionContextMenu(props: {
     {
       label: props.state.unread ? "Mark read" : "Mark unread",
       run: () => props.onUnread(props.state.session.id),
+    },
+    {
+      label: "Move to...",
+      run: () => props.onMove(props.state.session.id),
     },
   ]
   const dims = () => ({
@@ -657,11 +690,13 @@ function SessionsByProject(props: {
   toggleProjectArchive: (project: any) => void
   unreadLocal: () => Record<string, boolean>
   toggleUnread: (id: string) => void
+  order: () => Record<string, string[]>
+  onDrop: (request: SessionMoveRequest) => void
   decorations: () => Record<string, Decoration>
 }) {
   const context = props.context
   const groups = createMemo(() =>
-    groupSessions(props.sessions(), props.projects(), props.showArchived()),
+    groupSessions(props.sessions(), props.projects(), props.showArchived(), props.order()),
   )
 
   const [frame, setFrame] = createSignal(0)
@@ -684,8 +719,167 @@ function SessionsByProject(props: {
     return map
   })
 
+  const [dropTarget, setDropTarget] = createSignal<{
+    groupKey: string
+    index: number
+    group: boolean
+  }>()
+  let drag:
+    | {
+        sessionID: string
+        sourceKey: string
+        sourceIndex: number
+        contentTop: number
+        target?: { group: any; index: number; groupTarget: boolean }
+      }
+    | undefined
+  let suppressOpenUntil = 0
+
+  // One entry per rendered line, so a drag can map the pointer row to a group
+  // and an insertion index. Relative line numbers are enough because the source
+  // row's screen position anchors the map.
+  const layout = () => {
+    const entries: Array<{
+      type: "group" | "row"
+      group: any
+      row?: any
+      index: number
+      line: number
+    }> = []
+    let line = 0
+    for (const group of groups()) {
+      entries.push({ type: "group", group, index: 0, line })
+      let end = line
+      if (props.collapsed()[group.key] !== true) {
+        group.rows.forEach((row: any, index: number) => {
+          end += 1
+          entries.push({ type: "row", group, row, index, line: end })
+        })
+      }
+      line = end + 2
+    }
+    return entries
+  }
+
+  const beginDrag = (session: any, group: any, event: any) => {
+    if (event?.button !== 0) return
+    const entry = layout().find((item) => item.type === "row" && item.row.id === session.id)
+    if (!entry) return
+    drag = {
+      sessionID: session.id,
+      sourceKey: group.key,
+      sourceIndex: entry.index,
+      contentTop: event.y - entry.line,
+      target: undefined,
+    }
+  }
+
+  const updateDrag = (event: any) => {
+    if (!drag) return
+    const entries = layout()
+    if (!entries.length) return
+    const line = event.y - drag.contentTop
+    let target: { group: any; index: number; groupTarget: boolean }
+    if (line <= entries[0].line) {
+      target = { group: entries[0].group, index: 0, groupTarget: true }
+    } else {
+      const next = entries.find((item) => item.line >= line)
+      if (!next) {
+        const last = entries[entries.length - 1]
+        target = {
+          group: last.group,
+          index: last.type === "row" ? last.group.rows.length : 0,
+          groupTarget: false,
+        }
+      } else if (next.type === "group") {
+        target = { group: next.group, index: 0, groupTarget: true }
+      } else {
+        target = { group: next.group, index: next.index, groupTarget: false }
+      }
+    }
+    drag.target = target
+    setDropTarget({
+      groupKey: target.group.key,
+      index: target.index,
+      group: target.groupTarget,
+    })
+  }
+
+  const endDrag = () => {
+    const current = drag
+    drag = undefined
+    setDropTarget(undefined)
+    if (!current || !current.target) return
+    suppressOpenUntil = Date.now() + 300
+    const source = groups().find((group) => group.key === current.sourceKey)
+    const target = current.target.group
+    if (!source) return
+    if (source.key === target.key && current.target.index === current.sourceIndex) return
+    if (props.collapsed()[target.key] === true) props.toggle(target.key)
+
+    const fullOrder = (group: any) => {
+      const key = group.dir || group.key
+      const known = [...(props.order()[key] ?? [])]
+      const seen = new Set(known)
+      const missing = group.rows
+        .map((row: any) => row.id)
+        .filter((id: string) => !seen.has(id))
+      return [...missing, ...known]
+    }
+
+    const sessionID = current.sessionID
+    const sourceOrder = fullOrder(source).filter((id: string) => id !== sessionID)
+    let targetOrder =
+      source.key === target.key
+        ? sourceOrder
+        : fullOrder(target).filter((id: string) => id !== sessionID)
+    const anchor =
+      current.target.index < target.rows.length
+        ? target.rows[current.target.index].id
+        : undefined
+    if (anchor === sessionID) return
+    if (anchor) {
+      const at = targetOrder.indexOf(anchor)
+      targetOrder.splice(at === -1 ? targetOrder.length : at, 0, sessionID)
+    } else {
+      const last = target.rows[target.rows.length - 1]?.id
+      const at = last ? targetOrder.indexOf(last) + 1 : 0
+      targetOrder.splice(
+        at < 0 || at > targetOrder.length ? targetOrder.length : at,
+        0,
+        sessionID,
+      )
+    }
+    props.onDrop({
+      sessionID,
+      sourceKey: source.dir || source.key,
+      targetKey: target.dir || target.key,
+      sourceDir: source.dir,
+      targetDir: target.dir,
+      sourceOrder,
+      targetOrder,
+    })
+  }
+
+  const openSession = (session: any) => {
+    if (drag?.target) return
+    if (Date.now() < suppressOpenUntil) {
+      suppressOpenUntil = 0
+      return
+    }
+    if (props.unreadLocal()[session.id]) props.toggleUnread(session.id)
+    context.ui.router.navigate({ type: "session", sessionID: session.id })
+  }
+
   return (
-    <box flexDirection="column" paddingTop={1} gap={1}>
+    <box
+      flexDirection="column"
+      paddingTop={1}
+      gap={1}
+      onMouseDrag={(event: any) => updateDrag(event)}
+      onMouseDragEnd={endDrag}
+      onMouseUp={() => endDrag()}
+    >
       <TodoPanel
         context={context}
         sessionID={props.sessionID}
@@ -726,7 +920,17 @@ function SessionsByProject(props: {
           const isCollapsed = () => props.collapsed()[group.key] === true
           return (
             <box flexDirection="column">
-              <box flexDirection="row" gap={1} paddingRight={1}>
+              <box
+                flexDirection="row"
+                gap={1}
+                paddingRight={1}
+                backgroundColor={
+                  dropTarget()?.groupKey === group.key && dropTarget()?.group
+                    ? context.theme.background?.action?.primary?.hovered ??
+                      context.theme.background?.element
+                    : undefined
+                }
+              >
                 <box
                   flexDirection="row"
                   gap={1}
@@ -774,7 +978,7 @@ function SessionsByProject(props: {
               </box>
               <Show when={!isCollapsed()}>
                 <For each={group.rows}>
-                  {(session: any) => (
+                  {(session: any, index) => (
                     <SessionRow
                       context={context}
                       session={session}
@@ -788,8 +992,14 @@ function SessionsByProject(props: {
                       current={session.id === props.sessionID}
                       decoration={props.decorations()[session.id]}
                       onOpenMenu={props.openMenu}
+                      onOpen={() => openSession(session)}
+                      onDragStart={(event: any) => beginDrag(session, group, event)}
+                      drop={
+                        dropTarget()?.groupKey === group.key &&
+                        !dropTarget()?.group &&
+                        dropTarget()?.index === index()
+                      }
                       localUnread={props.unreadLocal()[session.id] === true}
-                      onToggleUnread={() => props.toggleUnread(session.id)}
                       childMap={childMap}
                     />
                   )}
@@ -1271,6 +1481,110 @@ export default Plugin.define({
         })
     }
 
+    // Manual session order, keyed by project directory. Sessions missing from a
+    // list (new ones) sort above it until the next drag records them.
+    let order: () => Record<string, string[]>
+    let updateOrder: (fn: (draft: Record<string, string[]>) => void) => void
+    try {
+      const [store, update] = context.storage.store("jump-sidebar.order", { initial: {} })
+      order = () => (typeof store === "function" ? store() : store) ?? {}
+      updateOrder = (fn) => update(fn)
+    } catch {
+      const [sig, set] = createSignal<Record<string, string[]>>({})
+      order = sig
+      updateOrder = (fn) =>
+        set((prev) => {
+          const next: Record<string, string[]> = { ...prev }
+          fn(next)
+          return next
+        })
+    }
+
+    const handleSessionDrop = async (request: SessionMoveRequest) => {
+      const beforeSource = [...(order()[request.sourceKey] ?? [])]
+      const beforeTarget = [...(order()[request.targetKey] ?? [])]
+      updateOrder((draft) => {
+        draft[request.sourceKey] = request.sourceOrder
+        draft[request.targetKey] = request.targetOrder
+      })
+      if (!request.targetDir || request.sourceDir === request.targetDir) return
+      try {
+        await context.client.session.move({
+          sessionID: request.sessionID,
+          directory: request.targetDir,
+        })
+        schedule()
+      } catch (err: any) {
+        updateOrder((draft) => {
+          draft[request.sourceKey] = beforeSource
+          draft[request.targetKey] = beforeTarget
+        })
+        context.ui.toast.show({
+          message: `Move failed: ${err?.message ?? err}`,
+          variant: "error",
+        })
+      }
+    }
+
+    // Right-click Move to... picks a destination project and moves the session
+    // there, the same operation as dragging it onto that project.
+    const moveToProject = async (sessionID: string) => {
+      const session =
+        sessions().find((s) => s.id === sessionID) ??
+        context.data.session.get?.(sessionID)
+      const sourceDir = session?.location?.directory ?? session?.directory
+      const options = projects()
+        .filter((project) => {
+          const dir = projectDir(project)
+          return Boolean(dir) && dir !== sourceDir && !isArchivedTitle(project.name)
+        })
+        .map((project) => ({
+          title: project.name || basename(projectDir(project)),
+          value: project.id,
+          description: projectDir(project),
+        }))
+      if (!options.length) {
+        context.ui.toast.show({ message: "No other projects", variant: "warning" })
+        return
+      }
+      const projectID = await context.ui.dialog.select({
+        title: "Move session to",
+        placeholder: "Project",
+        options,
+      })
+      if (!projectID) return
+      const project = projects().find((p) => p.id === projectID)
+      const targetDir = projectDir(project)
+      if (!project || !targetDir || targetDir === sourceDir) return
+
+      const sourceKey = sourceDir ?? ""
+      const targetKey = targetDir
+      const beforeSource = [...(order()[sourceKey] ?? [])]
+      const beforeTarget = [...(order()[targetKey] ?? [])]
+      updateOrder((draft) => {
+        if (sourceKey) {
+          draft[sourceKey] = (draft[sourceKey] ?? []).filter((id) => id !== sessionID)
+        }
+        draft[targetKey] = [
+          sessionID,
+          ...(draft[targetKey] ?? []).filter((id) => id !== sessionID),
+        ]
+      })
+      try {
+        await context.client.session.move({ sessionID, directory: targetDir })
+        schedule()
+      } catch (err: any) {
+        updateOrder((draft) => {
+          if (sourceKey) draft[sourceKey] = beforeSource
+          draft[targetKey] = beforeTarget
+        })
+        context.ui.toast.show({
+          message: `Move failed: ${err?.message ?? err}`,
+          variant: "error",
+        })
+      }
+    }
+
     // Right-click menu shared by every session row. The row reports the click
     // and the state; the actions live here.
     const [sessionMenu, setSessionMenu] = createSignal<SessionMenuState>()
@@ -1459,6 +1773,8 @@ export default Plugin.define({
         toggleProjectArchive={toggleProjectArchive}
         unreadLocal={unreadLocal}
         toggleUnread={toggleUnread}
+        order={order}
+        onDrop={handleSessionDrop}
         decorations={decorations}
       />
     )
@@ -1512,6 +1828,10 @@ export default Plugin.define({
               onUnread={(sessionID) => {
                 closeSessionMenu()
                 toggleUnread(sessionID)
+              }}
+              onMove={(sessionID) => {
+                closeSessionMenu()
+                void moveToProject(sessionID)
               }}
             />
           )}
