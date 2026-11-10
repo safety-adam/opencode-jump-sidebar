@@ -369,6 +369,8 @@ function SessionRow(props: {
     unread: boolean
   }) => void
   onDragStart?: (event: any) => void
+  onDrag?: (event: any) => void
+  onDragEnd?: (event: any) => void
   drop?: boolean
   childMap?: () => Map<string, any[]>
 }) {
@@ -489,6 +491,8 @@ function SessionRow(props: {
           : rowBg()
       }
       onMouseDown={(e: any) => props.onDragStart?.(e)}
+      onMouseDrag={(e: any) => props.onDrag?.(e)}
+      onMouseDragEnd={(e: any) => props.onDragEnd?.(e)}
       onMouseUp={(e: any) => {
         if (e?.button === 2) {
           e.preventDefault?.()
@@ -672,6 +676,88 @@ function SessionContextMenu(props: {
   )
 }
 
+type ProjectMenuState = { project: any; x: number; y: number }
+
+function ProjectContextMenu(props: {
+  context: any
+  state: ProjectMenuState
+  onClose: () => void
+  onToggle: () => void
+}) {
+  const context = props.context
+  const width = 20
+  const label = () =>
+    isArchivedTitle(props.state.project?.name) ? "Unarchive project" : "Archive project"
+  const dims = () => ({
+    width: context.renderer?.width ?? 80,
+    height: context.renderer?.height ?? 24,
+  })
+  const left = () => Math.max(0, Math.min(props.state.x, dims().width - width))
+  const top = () => Math.max(0, Math.min(props.state.y + 1, dims().height - 2))
+  const run = () => {
+    props.onClose()
+    props.onToggle()
+  }
+
+  try {
+    const pop = context.keymap?.mode?.push?.("menu")
+    if (pop) onCleanup(pop)
+  } catch {}
+  try {
+    context.keymap?.layer?.(() => ({
+      mode: "menu",
+      commands: [
+        { bind: "escape,ctrl+c", title: "Close project menu", run: () => props.onClose() },
+        { bind: "return", title: "Run project menu item", run },
+      ],
+    }))
+  } catch {}
+
+  const background = context.theme.background?.raised?.high ?? context.theme.background?.element
+  const hovered = context.theme.background?.action?.primary?.hovered ?? background
+
+  return (
+    <box
+      position="absolute"
+      left={0}
+      top={0}
+      width="100%"
+      height="100%"
+      zIndex={2600}
+      onMouseDown={(e: any) => {
+        e?.preventDefault?.()
+        e?.stopPropagation?.()
+        props.onClose()
+      }}
+    >
+      <box
+        position="absolute"
+        left={left()}
+        top={top()}
+        width={width}
+        height={1}
+        paddingLeft={1}
+        paddingRight={1}
+        backgroundColor={hovered}
+        onMouseDown={(e: any) => {
+          e?.preventDefault?.()
+          e?.stopPropagation?.()
+        }}
+        onMouseUp={(e: any) => {
+          e?.preventDefault?.()
+          e?.stopPropagation?.()
+          if (e?.button !== 0) return
+          run()
+        }}
+      >
+        <text fg={context.theme.text.base} wrapMode="none" truncate>
+          {label()}
+        </text>
+      </box>
+    </box>
+  )
+}
+
 function SessionsByProject(props: {
   context: any
   sessionID?: string
@@ -687,7 +773,7 @@ function SessionsByProject(props: {
   createSession: (dir?: string) => void
   newProject: () => void
   openMenu: (state: SessionMenuState) => void
-  toggleProjectArchive: (project: any) => void
+  openProjectMenu: (project: any, x: number, y: number) => void
   unreadLocal: () => Record<string, boolean>
   toggleUnread: (id: string) => void
   order: () => Record<string, string[]>
@@ -930,13 +1016,23 @@ function SessionsByProject(props: {
                       context.theme.background?.element
                     : undefined
                 }
+                onMouseUp={(e: any) => {
+                  if (e?.button !== 2) return
+                  e.preventDefault?.()
+                  e.stopPropagation?.()
+                  const project = props.projects().find((p) => p.id === group.key)
+                  if (project) props.openProjectMenu(project, e.x ?? 0, e.y ?? 0)
+                }}
               >
                 <box
                   flexDirection="row"
                   gap={1}
                   flexGrow={1}
                   minWidth={0}
-                  onMouseUp={() => props.toggle(group.key)}
+                  onMouseUp={(e: any) => {
+                    if (e?.button !== 0) return
+                    props.toggle(group.key)
+                  }}
                 >
                   <text fg={context.theme.text.muted} flexShrink={0}>
                     {isCollapsed() ? "▶" : "▼"}
@@ -951,25 +1047,12 @@ function SessionsByProject(props: {
                     {`${group.label} (${group.rows.length})`}
                   </text>
                 </box>
-                <Show when={props.projects().find((p) => p.id === group.key)}>
-                  {(project) => (
-                    <text
-                      fg={context.theme.text.muted}
-                      flexShrink={0}
-                      onMouseUp={(e: any) => {
-                        e?.stopPropagation?.()
-                        props.toggleProjectArchive(project())
-                      }}
-                    >
-                      {isArchivedTitle(project().name) ? "⇡" : "⇣"}
-                    </text>
-                  )}
-                </Show>
                 <text
                   fg={context.theme.text.base}
                   flexShrink={0}
                   onMouseUp={(e: any) => {
-                    e?.stopPropagation?.()
+                    if (e?.button !== 0) return
+                    e.stopPropagation?.()
                     props.createSession(group.dir)
                   }}
                 >
@@ -994,6 +1077,8 @@ function SessionsByProject(props: {
                       onOpenMenu={props.openMenu}
                       onOpen={() => openSession(session)}
                       onDragStart={(event: any) => beginDrag(session, group, event)}
+                      onDrag={(event: any) => updateDrag(event)}
+                      onDragEnd={endDrag}
                       drop={
                         dropTarget()?.groupKey === group.key &&
                         !dropTarget()?.group &&
@@ -1591,6 +1676,11 @@ export default Plugin.define({
     const openSessionMenu = (state: SessionMenuState) => setSessionMenu(state)
     const closeSessionMenu = () => setSessionMenu(undefined)
 
+    const [projectMenu, setProjectMenu] = createSignal<ProjectMenuState>()
+    const openProjectMenu = (project: any, x: number, y: number) =>
+      setProjectMenu({ project, x, y })
+    const closeProjectMenu = () => setProjectMenu(undefined)
+
     // Session navigation history for the history keybinds. OpenCode declares
     // session.tab.history.back and session.tab.history.forward but ships no command
     // behind either one, so the plugin supplies them. The stack is in memory and
@@ -1770,7 +1860,7 @@ export default Plugin.define({
         createSession={createSession}
         newProject={newProject}
         openMenu={openSessionMenu}
-        toggleProjectArchive={toggleProjectArchive}
+        openProjectMenu={openProjectMenu}
         unreadLocal={unreadLocal}
         toggleUnread={toggleUnread}
         order={order}
@@ -1832,6 +1922,24 @@ export default Plugin.define({
               onMove={(sessionID) => {
                 closeSessionMenu()
                 void moveToProject(sessionID)
+              }}
+            />
+          )}
+        </Show>
+      ),
+    })
+
+    context.ui.slot({
+      append: "app",
+      render: () => (
+        <Show when={projectMenu()} keyed>
+          {(state) => (
+            <ProjectContextMenu
+              context={context}
+              state={state}
+              onClose={closeProjectMenu}
+              onToggle={() => {
+                void toggleProjectArchive(state.project)
               }}
             />
           )}
