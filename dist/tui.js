@@ -476,8 +476,6 @@ function SessionRow(props) {
     _$setProp(_el$9, "gap", 1);
     _$setProp(_el$9, "paddingRight", 1);
     _$setProp(_el$9, "onMouseDown", e => props.onDragStart?.(e));
-    _$setProp(_el$9, "onMouseDrag", e => props.onDrag?.(e));
-    _$setProp(_el$9, "onMouseDragEnd", e => props.onDragEnd?.(e));
     _$setProp(_el$9, "onMouseUp", e => {
       if (e?.button === 2) {
         e.preventDefault?.();
@@ -1093,8 +1091,6 @@ function SessionsByProject(props) {
                   },
                   onOpen: () => openSession(session),
                   onDragStart: event => beginDrag(session, group, event),
-                  onDrag: event => updateDrag(event),
-                  onDragEnd: endDrag,
                   get dragging() {
                     return preview()?.sessionID === session.id;
                   },

@@ -369,8 +369,6 @@ function SessionRow(props: {
     unread: boolean
   }) => void
   onDragStart?: (event: any) => void
-  onDrag?: (event: any) => void
-  onDragEnd?: (event: any) => void
   drop?: boolean
   dragging?: boolean
   childMap?: () => Map<string, any[]>
@@ -495,8 +493,6 @@ function SessionRow(props: {
             : rowBg()
       }
       onMouseDown={(e: any) => props.onDragStart?.(e)}
-      onMouseDrag={(e: any) => props.onDrag?.(e)}
-      onMouseDragEnd={(e: any) => props.onDragEnd?.(e)}
       onMouseUp={(e: any) => {
         if (e?.button === 2) {
           e.preventDefault?.()
@@ -1121,8 +1117,6 @@ function SessionsByProject(props: {
                       onOpenMenu={props.openMenu}
                       onOpen={() => openSession(session)}
                       onDragStart={(event: any) => beginDrag(session, group, event)}
-                      onDrag={(event: any) => updateDrag(event)}
-                      onDragEnd={endDrag}
                       dragging={preview()?.sessionID === session.id}
                       drop={
                         dropTarget()?.groupKey === group.key &&
