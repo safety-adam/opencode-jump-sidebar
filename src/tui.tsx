@@ -1,5 +1,4 @@
 import { Plugin } from "@opencode/plugin/tui"
-import { Portal } from "@opentui/solid"
 import { For, Show, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js"
 import { mkdirSync, readFileSync, readdirSync, appendFileSync } from "node:fs"
 import { homedir } from "node:os"
@@ -371,7 +370,6 @@ function SessionRow(props: {
   }) => void
   onDragStart?: (event: any) => void
   drop?: boolean
-  dragging?: boolean
   childMap?: () => Map<string, any[]>
 }) {
   const context = props.context
@@ -485,13 +483,10 @@ function SessionRow(props: {
       gap={1}
       paddingRight={1}
       backgroundColor={
-        props.dragging
-          ? context.theme.background?.action?.primary?.selected ??
+        props.drop
+          ? context.theme.background?.action?.primary?.hovered ??
             context.theme.background?.element
-          : props.drop
-            ? context.theme.background?.action?.primary?.hovered ??
-              context.theme.background?.element
-            : rowBg()
+          : rowBg()
       }
       onMouseDown={(e: any) => props.onDragStart?.(e)}
       onMouseUp={(e: any) => {
@@ -811,13 +806,6 @@ function SessionsByProject(props: {
     index: number
     group: boolean
   }>()
-  const [preview, setPreview] = createSignal<{
-    sessionID: string
-    sourceKey: string
-    targetKey: string
-    targetIndex: number
-  }>()
-  const [dragActive, setDragActive] = createSignal(false)
   let drag:
     | {
         sessionID: string
@@ -853,33 +841,6 @@ function SessionsByProject(props: {
       line = end + 2
     }
     return entries
-  }
-
-  // Rows to render for a group. While dragging, the affected groups show the
-  // dragged session at the pointer position so the list updates live.
-  const rowsFor = (group: any) => {
-    const p = preview()
-    if (!p) return group.rows
-    if (group.key !== p.sourceKey && group.key !== p.targetKey) return group.rows
-    const source = groups().find((item) => item.key === p.sourceKey)
-    const session = source?.rows.find((row: any) => row.id === p.sessionID)
-    if (!session) return group.rows
-    if (group.key === p.sourceKey && group.key === p.targetKey) {
-      const from = group.rows.findIndex((row: any) => row.id === p.sessionID)
-      const rows = group.rows.filter((row: any) => row.id !== p.sessionID)
-      let insert = p.targetIndex
-      if (from !== -1 && from < p.targetIndex) insert -= 1
-      insert = Math.max(0, Math.min(insert, rows.length))
-      rows.splice(insert, 0, session)
-      return rows
-    }
-    if (group.key === p.sourceKey) {
-      return group.rows.filter((row: any) => row.id !== p.sessionID)
-    }
-    const rows = [...group.rows]
-    const insert = Math.max(0, Math.min(p.targetIndex, rows.length))
-    rows.splice(insert, 0, session)
-    return rows
   }
 
   const beginDrag = (session: any, group: any, event: any) => {
@@ -924,21 +885,12 @@ function SessionsByProject(props: {
       index: target.index,
       group: target.groupTarget,
     })
-    setPreview({
-      sessionID: drag.sessionID,
-      sourceKey: drag.sourceKey,
-      targetKey: target.group.key,
-      targetIndex: target.index,
-    })
-    setDragActive(true)
   }
 
   const endDrag = () => {
     const current = drag
     drag = undefined
     setDropTarget(undefined)
-    setPreview(undefined)
-    setDragActive(false)
     if (!current || !current.target) return
     suppressOpenUntil = Date.now() + 300
     const source = groups().find((group) => group.key === current.sourceKey)
@@ -1001,12 +953,16 @@ function SessionsByProject(props: {
     context.ui.router.navigate({ type: "session", sessionID: session.id })
   }
 
+  const insertColor = () =>
+    context.theme.hue?.accent?.[500] ?? context.theme.text.feedback?.info?.base
+
   return (
     <box
       flexDirection="column"
       paddingTop={1}
       gap={1}
       onMouseDrag={(event: any) => updateDrag(event)}
+      onMouseDragEnd={endDrag}
       onMouseUp={() => endDrag()}
     >
       <TodoPanel
@@ -1088,7 +1044,7 @@ function SessionsByProject(props: {
                     flexGrow={1}
                     minWidth={0}
                   >
-                    {`${group.label} (${rowsFor(group).length})`}
+                    {`${group.label} (${group.rows.length})`}
                   </text>
                 </box>
                 <text selectable={false}
@@ -1105,62 +1061,58 @@ function SessionsByProject(props: {
                 </text>
               </box>
               <Show when={!isCollapsed()}>
-                <For each={rowsFor(group)}>
+                <For each={group.rows}>
                   {(session: any, index) => (
-                    <SessionRow
-                      context={context}
-                      session={session}
-                      frame={frame}
-                      working={props.working}
-                      eventKind={props.kinds()[session.id]}
-                      unread={
-                        Boolean(tabs().get(session.id)?.unread) ||
-                        props.unreadLocal()[session.id] === true
-                      }
-                      current={session.id === props.sessionID}
-                      decoration={props.decorations()[session.id]}
-                      onOpenMenu={props.openMenu}
-                      onOpen={() => openSession(session)}
-                      onDragStart={(event: any) => beginDrag(session, group, event)}
-                      dragging={preview()?.sessionID === session.id}
-                      drop={
-                        dropTarget()?.groupKey === group.key &&
-                        !dropTarget()?.group &&
-                        dropTarget()?.index === index()
-                      }
-                      localUnread={props.unreadLocal()[session.id] === true}
-                      childMap={childMap}
-                    />
+                    <>
+                      <Show
+                        when={
+                          dropTarget()?.groupKey === group.key &&
+                          !dropTarget()?.group &&
+                          dropTarget()?.index === index()
+                        }
+                      >
+                        <box height={1} backgroundColor={insertColor()} />
+                      </Show>
+                      <SessionRow
+                        context={context}
+                        session={session}
+                        frame={frame}
+                        working={props.working}
+                        eventKind={props.kinds()[session.id]}
+                        unread={
+                          Boolean(tabs().get(session.id)?.unread) ||
+                          props.unreadLocal()[session.id] === true
+                        }
+                        current={session.id === props.sessionID}
+                        decoration={props.decorations()[session.id]}
+                        onOpenMenu={props.openMenu}
+                        onOpen={() => openSession(session)}
+                        onDragStart={(event: any) => beginDrag(session, group, event)}
+                        drop={
+                          dropTarget()?.groupKey === group.key &&
+                          !dropTarget()?.group &&
+                          dropTarget()?.index === index()
+                        }
+                        localUnread={props.unreadLocal()[session.id] === true}
+                        childMap={childMap}
+                      />
+                    </>
                   )}
                 </For>
+                <Show
+                  when={
+                    dropTarget()?.groupKey === group.key &&
+                    !dropTarget()?.group &&
+                    dropTarget()?.index === group.rows.length
+                  }
+                >
+                  <box height={1} backgroundColor={insertColor()} />
+                </Show>
               </Show>
             </box>
           )
         }}
       </For>
-      <Show when={dragActive()}>
-        <Portal
-          ref={(container: any) => {
-            if (!container) return
-            container.position = "absolute"
-            container.left = 0
-            container.top = 0
-            container.zIndex = 2600
-          }}
-        >
-          <box
-            position="absolute"
-            left={0}
-            top={0}
-            width="100%"
-            height="100%"
-            zIndex={2600}
-            onMouseDrag={(event: any) => updateDrag(event)}
-            onMouseDragEnd={() => endDrag()}
-            onMouseUp={() => endDrag()}
-          />
-        </Portal>
-      </Show>
     </box>
   )
 }
