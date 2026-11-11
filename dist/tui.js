@@ -561,6 +561,9 @@ function SessionContextMenu(props) {
   }, {
     label: "Move to...",
     run: () => props.onMove(props.state.session.id)
+  }, {
+    label: "Delete",
+    run: () => props.onDelete(props.state.session.id)
   }];
   const dims = () => ({
     width: context.renderer?.width ?? 80,
@@ -1667,6 +1670,44 @@ export default Plugin.define({
       }
     };
 
+    // Delete a session after confirmation, used by the right-click menu.
+    const deleteSession = async sessionID => {
+      const session = sessions().find(s => s.id === sessionID);
+      const title = session?.title || defaultTitle(session);
+      const ok = await context.ui.dialog.confirm({
+        title: "Delete session",
+        message: `Delete "${title}" permanently?`,
+        label: {
+          confirm: "Delete",
+          cancel: "Cancel"
+        }
+      });
+      if (!ok) return;
+      try {
+        await context.client.session.remove({
+          sessionID
+        });
+        updateOrder(draft => {
+          for (const key of Object.keys(draft)) {
+            draft[key] = (draft[key] ?? []).filter(id => id !== sessionID);
+          }
+        });
+        if (unreadLocal()[sessionID]) toggleUnread(sessionID);
+        const route = context.ui.router.current();
+        if (route?.type === "session" && route.sessionID === sessionID) {
+          context.ui.router.navigate({
+            type: "home"
+          });
+        }
+        schedule();
+      } catch (err) {
+        context.ui.toast.show({
+          message: `Delete failed: ${err?.message ?? err}`,
+          variant: "error"
+        });
+      }
+    };
+
     // Right-click menu shared by every session row. The row reports the click
     // and the state; the actions live here.
     const [sessionMenu, setSessionMenu] = createSignal();
@@ -1914,6 +1955,10 @@ export default Plugin.define({
           onMove: sessionID => {
             closeSessionMenu();
             void moveToProject(sessionID);
+          },
+          onDelete: sessionID => {
+            closeSessionMenu();
+            void deleteSession(sessionID);
           }
         })
       })

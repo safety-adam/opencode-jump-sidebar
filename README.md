@@ -87,7 +87,7 @@ The session sidebar gets a **Todos** section above the **Jump to session** secti
 - click a session to open it, `+` next to a project to create a session in it;
 - drag a session up or down to reorder it, or onto another project to move it there. The drop target is highlighted while you drag, and the order is stored on this machine;
 - click `+` on the **Jump to session** heading to create a new project. A prompt asks for the name, then it creates the folder under the configured `root` and a seeded session, the same result as `/new-project`;
-- right-click a session for a menu with Archive or Unarchive, Mark unread or Mark read, and Move to... which opens a project picker. Archiving uses the same title convention as `/archive`;
+- right-click a session for a menu with Archive or Unarchive, Mark unread or Mark read, Move to..., or Delete after a confirmation. Archiving uses the same title convention as `/archive`;
 - right-click a project for Archive project or Unarchive project. A confirmation asks first. Archiving a project also archives every session in it that is not already archived. Archived projects are hidden unless `≡` is on;
 - the unread flag clears when you open the session. It is stored on this machine, so it does not change OpenCode's own unread state or other devices;
 - the `≡` toggle shows or hides archived sessions. A session is archived when its title starts with `[Archived] `;
