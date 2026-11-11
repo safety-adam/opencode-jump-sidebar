@@ -291,6 +291,12 @@ function TodoPanel(props: {
   )
 }
 
+function dragTrace(message: string) {
+  try {
+    appendFileSync("/tmp/jump-drag.log", `${new Date().toISOString()} ${message}\n`)
+  } catch {}
+}
+
 function groupSessions(
   sessions: any[],
   projects: any[],
@@ -369,7 +375,9 @@ function SessionRow(props: {
     unread: boolean
   }) => void
   onDragStart?: (event: any) => void
+  onDrag?: (event: any) => void
   drop?: boolean
+  dragging?: boolean
   childMap?: () => Map<string, any[]>
 }) {
   const context = props.context
@@ -477,18 +485,19 @@ function SessionRow(props: {
     return context.theme.text.muted
   }
 
+  const dragBg = () =>
+    context.theme.hue?.accent?.[500] ??
+    context.theme.background?.action?.primary?.hovered ??
+    context.theme.background?.element
+
   return (
     <box
       flexDirection="row"
       gap={1}
       paddingRight={1}
-      backgroundColor={
-        props.drop
-          ? context.theme.background?.action?.primary?.hovered ??
-            context.theme.background?.element
-          : rowBg()
-      }
+      backgroundColor={props.dragging || props.drop ? dragBg() : rowBg()}
       onMouseDown={(e: any) => props.onDragStart?.(e)}
+      onMouseDrag={(e: any) => props.onDrag?.(e)}
       onMouseUp={(e: any) => {
         if (e?.button === 2) {
           e.preventDefault?.()
@@ -520,12 +529,13 @@ function SessionRow(props: {
         </text>
       </Show>
       <text selectable={false}
-        fg={titleColor()}
+        fg={props.dragging ? context.theme.text.base : titleColor()}
         attributes={active() ? 1 : 0}
         wrapMode="none"
         truncate
         flexGrow={1}
         minWidth={0}
+        backgroundColor={props.dragging ? dragBg() : undefined}
       >
         {displayTitle(props.session)}
       </text>
@@ -811,6 +821,7 @@ function SessionsByProject(props: {
     index: number
     group: boolean
   }>()
+  const [draggingSession, setDraggingSession] = createSignal<string>()
   let drag:
     | {
         sessionID: string
@@ -849,8 +860,10 @@ function SessionsByProject(props: {
   }
 
   const beginDrag = (session: any, group: any, event: any) => {
+    dragTrace(`begin ${session.id} ${event?.x},${event?.y} button=${event?.button}`)
     if (event?.button !== 0) return
     const entry = layout().find((item) => item.type === "row" && item.row.id === session.id)
+    dragTrace(`begin entry=${entry ? entry.index : "none"} line=${entry ? entry.line : "none"}`)
     if (!entry) return
     drag = {
       sessionID: session.id,
@@ -859,6 +872,7 @@ function SessionsByProject(props: {
       contentTop: event.y - entry.line,
       target: undefined,
     }
+    setDraggingSession(session.id)
   }
 
   const updateDrag = (event: any) => {
@@ -885,6 +899,7 @@ function SessionsByProject(props: {
       }
     }
     drag.target = target
+    dragTrace(`move ${event?.x},${event?.y} -> ${target.group.key}:${target.index}`)
     setDropTarget({
       groupKey: target.group.key,
       index: target.index,
@@ -894,7 +909,9 @@ function SessionsByProject(props: {
 
   const endDrag = () => {
     const current = drag
+    dragTrace(`end target=${current?.target ? `${current.target.group.key}:${current.target.index}` : "none"}`)
     drag = undefined
+    setDraggingSession(undefined)
     setDropTarget(undefined)
     if (!current || !current.target) return
     suppressOpenUntil = Date.now() + 300
@@ -920,9 +937,13 @@ function SessionsByProject(props: {
       source.key === target.key
         ? sourceOrder
         : fullOrder(target).filter((id: string) => id !== sessionID)
+    const insertionIndex =
+      current.sourceKey === target.key && current.sourceIndex < current.target.index
+        ? current.target.index + 1
+        : current.target.index
     const anchor =
-      current.target.index < target.rows.length
-        ? target.rows[current.target.index].id
+      insertionIndex < target.rows.length
+        ? target.rows[insertionIndex].id
         : undefined
     if (anchor === sessionID) return
     if (anchor) {
@@ -1080,6 +1101,8 @@ function SessionsByProject(props: {
                         onOpenMenu={props.openMenu}
                         onOpen={() => openSession(session)}
                         onDragStart={(event: any) => beginDrag(session, group, event)}
+                        onDrag={(event: any) => updateDrag(event)}
+                        dragging={draggingSession() === session.id}
                         drop={
                           dropTarget()?.groupKey === group.key &&
                           !dropTarget()?.group &&
@@ -1593,6 +1616,14 @@ export default Plugin.define({
         draft[request.sourceKey] = request.sourceOrder
         draft[request.targetKey] = request.targetOrder
       })
+      dragTrace(
+        `drop ${request.sessionID.slice(-6)} before=${beforeTarget
+          .map((id) => id.slice(-6))
+          .join(",")} requested=${request.targetOrder.map((id) => id.slice(-6)).join(",")}`,
+      )
+      dragTrace(
+        `stored=${(order()[request.targetKey] ?? []).map((id) => id.slice(-6)).join(",")}`,
+      )
       if (!request.targetDir || request.sourceDir === request.targetDir) return
       try {
         await context.client.session.move({
