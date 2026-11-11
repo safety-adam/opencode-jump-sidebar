@@ -486,16 +486,18 @@ function SessionRow(props: {
   }
 
   const dragBg = () =>
-    context.theme.hue?.accent?.[500] ??
-    context.theme.background?.action?.primary?.hovered ??
-    context.theme.background?.element
+    context.theme.scrollbar?.base ?? context.theme.background?.element
+  const insertColor = () =>
+    context.theme.hue?.accent?.[500] ?? context.theme.text.feedback?.info?.base
 
   return (
     <box
       flexDirection="row"
       gap={1}
       paddingRight={1}
-      backgroundColor={props.dragging || props.drop ? dragBg() : rowBg()}
+      backgroundColor={props.dragging ? dragBg() : rowBg()}
+      border={props.drop ? ["left"] : undefined}
+      borderColor={props.drop ? insertColor() : undefined}
       onMouseDown={(e: any) => props.onDragStart?.(e)}
       onMouseDrag={(e: any) => props.onDrag?.(e)}
       onMouseUp={(e: any) => {
@@ -828,7 +830,7 @@ function SessionsByProject(props: {
         sourceKey: string
         sourceIndex: number
         contentTop: number
-        target?: { group: any; index: number; groupTarget: boolean }
+        target?: { group: any; index: number; groupTarget: boolean; line: number }
       }
     | undefined
   let suppressOpenUntil = 0
@@ -880,9 +882,9 @@ function SessionsByProject(props: {
     const entries = layout()
     if (!entries.length) return
     const line = event.y - drag.contentTop
-    let target: { group: any; index: number; groupTarget: boolean }
+    let target: { group: any; index: number; groupTarget: boolean; line: number }
     if (line <= entries[0].line) {
-      target = { group: entries[0].group, index: 0, groupTarget: true }
+      target = { group: entries[0].group, index: 0, groupTarget: true, line: entries[0].line }
     } else {
       const next = entries.find((item) => item.line >= line)
       if (!next) {
@@ -891,20 +893,21 @@ function SessionsByProject(props: {
           group: last.group,
           index: last.type === "row" ? last.group.rows.length : 0,
           groupTarget: false,
+          line: last.line + 1,
         }
       } else if (next.type === "group") {
-        target = { group: next.group, index: 0, groupTarget: true }
+        target = { group: next.group, index: 0, groupTarget: true, line: next.line }
       } else {
-        target = { group: next.group, index: next.index, groupTarget: false }
+        target = { group: next.group, index: next.index, groupTarget: false, line: next.line }
       }
     }
     drag.target = target
-    dragTrace(`move ${event?.x},${event?.y} -> ${target.group.key}:${target.index}`)
     setDropTarget({
       groupKey: target.group.key,
       index: target.index,
       group: target.groupTarget,
     })
+    dragTrace(`move ${event?.x},${event?.y} -> ${target.group.key}:${target.index}`)
   }
 
   const endDrag = () => {
@@ -979,6 +982,9 @@ function SessionsByProject(props: {
     context.ui.router.navigate({ type: "session", sessionID: session.id })
   }
 
+  const insertColor = () =>
+    context.theme.hue?.accent?.[500] ?? context.theme.text.feedback?.info?.base
+
   return (
     <box
       flexDirection="column"
@@ -1032,11 +1038,11 @@ function SessionsByProject(props: {
                 flexDirection="row"
                 gap={1}
                 paddingRight={1}
-                backgroundColor={
-                  dropTarget()?.groupKey === group.key && dropTarget()?.group
-                    ? context.theme.background?.action?.primary?.hovered ??
-                      context.theme.background?.element
-                    : undefined
+                border={
+                  dropTarget()?.groupKey === group.key && dropTarget()?.group ? ["left"] : undefined
+                }
+                borderColor={
+                  dropTarget()?.groupKey === group.key && dropTarget()?.group ? insertColor() : undefined
                 }
                 onMouseUp={(e: any) => {
                   if (e?.button !== 2) return

@@ -471,7 +471,8 @@ function SessionRow(props) {
     }
     return context.theme.text.muted;
   };
-  const dragBg = () => context.theme.hue?.accent?.[500] ?? context.theme.background?.action?.primary?.hovered ?? context.theme.background?.element;
+  const dragBg = () => context.theme.scrollbar?.base ?? context.theme.background?.element;
+  const insertColor = () => context.theme.hue?.accent?.[500] ?? context.theme.text.feedback?.info?.base;
   return (() => {
     var _el$9 = _$createElement("box"),
       _el$0 = _$createElement("text"),
@@ -535,23 +536,29 @@ function SessionRow(props) {
     _$setProp(_el$12, "minWidth", 0);
     _$insert(_el$12, () => displayTitle(props.session));
     _$effect(_p$ => {
-      var _v$6 = props.dragging || props.drop ? dragBg() : rowBg(),
-        _v$7 = iconColor(),
-        _v$8 = props.dragging ? context.theme.text.base : titleColor(),
-        _v$9 = active() ? 1 : 0,
-        _v$0 = props.dragging ? dragBg() : undefined;
+      var _v$6 = props.dragging ? dragBg() : rowBg(),
+        _v$7 = props.drop ? ["left"] : undefined,
+        _v$8 = props.drop ? insertColor() : undefined,
+        _v$9 = iconColor(),
+        _v$0 = props.dragging ? context.theme.text.base : titleColor(),
+        _v$1 = active() ? 1 : 0,
+        _v$10 = props.dragging ? dragBg() : undefined;
       _v$6 !== _p$.e && (_p$.e = _$setProp(_el$9, "backgroundColor", _v$6, _p$.e));
-      _v$7 !== _p$.t && (_p$.t = _$setProp(_el$0, "fg", _v$7, _p$.t));
-      _v$8 !== _p$.a && (_p$.a = _$setProp(_el$12, "fg", _v$8, _p$.a));
-      _v$9 !== _p$.o && (_p$.o = _$setProp(_el$12, "attributes", _v$9, _p$.o));
-      _v$0 !== _p$.i && (_p$.i = _$setProp(_el$12, "backgroundColor", _v$0, _p$.i));
+      _v$7 !== _p$.t && (_p$.t = _$setProp(_el$9, "border", _v$7, _p$.t));
+      _v$8 !== _p$.a && (_p$.a = _$setProp(_el$9, "borderColor", _v$8, _p$.a));
+      _v$9 !== _p$.o && (_p$.o = _$setProp(_el$0, "fg", _v$9, _p$.o));
+      _v$0 !== _p$.i && (_p$.i = _$setProp(_el$12, "fg", _v$0, _p$.i));
+      _v$1 !== _p$.n && (_p$.n = _$setProp(_el$12, "attributes", _v$1, _p$.n));
+      _v$10 !== _p$.s && (_p$.s = _$setProp(_el$12, "backgroundColor", _v$10, _p$.s));
       return _p$;
     }, {
       e: undefined,
       t: undefined,
       a: undefined,
       o: undefined,
-      i: undefined
+      i: undefined,
+      n: undefined,
+      s: undefined
     });
     return _el$9;
   })();
@@ -661,10 +668,10 @@ function SessionContextMenu(props) {
         _$setProp(_el$16, "truncate", true);
         _$insert(_el$16, () => item.label);
         _$effect(_p$ => {
-          var _v$12 = index() === selected() ? hovered : background,
-            _v$13 = context.theme.text.base;
-          _v$12 !== _p$.e && (_p$.e = _$setProp(_el$15, "backgroundColor", _v$12, _p$.e));
-          _v$13 !== _p$.t && (_p$.t = _$setProp(_el$16, "fg", _v$13, _p$.t));
+          var _v$14 = index() === selected() ? hovered : background,
+            _v$15 = context.theme.text.base;
+          _v$14 !== _p$.e && (_p$.e = _$setProp(_el$15, "backgroundColor", _v$14, _p$.e));
+          _v$15 !== _p$.t && (_p$.t = _$setProp(_el$16, "fg", _v$15, _p$.t));
           return _p$;
         }, {
           e: undefined,
@@ -674,12 +681,12 @@ function SessionContextMenu(props) {
       })()
     }));
     _$effect(_p$ => {
-      var _v$1 = left(),
-        _v$10 = top(),
-        _v$11 = items().length;
-      _v$1 !== _p$.e && (_p$.e = _$setProp(_el$14, "left", _v$1, _p$.e));
-      _v$10 !== _p$.t && (_p$.t = _$setProp(_el$14, "top", _v$10, _p$.t));
-      _v$11 !== _p$.a && (_p$.a = _$setProp(_el$14, "height", _v$11, _p$.a));
+      var _v$11 = left(),
+        _v$12 = top(),
+        _v$13 = items().length;
+      _v$11 !== _p$.e && (_p$.e = _$setProp(_el$14, "left", _v$11, _p$.e));
+      _v$12 !== _p$.t && (_p$.t = _$setProp(_el$14, "top", _v$12, _p$.t));
+      _v$13 !== _p$.a && (_p$.a = _$setProp(_el$14, "height", _v$13, _p$.a));
       return _p$;
     }, {
       e: undefined,
@@ -761,12 +768,12 @@ function ProjectContextMenu(props) {
     _$setProp(_el$19, "truncate", true);
     _$insert(_el$19, label);
     _$effect(_p$ => {
-      var _v$14 = left(),
-        _v$15 = top(),
-        _v$16 = context.theme.text.base;
-      _v$14 !== _p$.e && (_p$.e = _$setProp(_el$18, "left", _v$14, _p$.e));
-      _v$15 !== _p$.t && (_p$.t = _$setProp(_el$18, "top", _v$15, _p$.t));
-      _v$16 !== _p$.a && (_p$.a = _$setProp(_el$19, "fg", _v$16, _p$.a));
+      var _v$16 = left(),
+        _v$17 = top(),
+        _v$18 = context.theme.text.base;
+      _v$16 !== _p$.e && (_p$.e = _$setProp(_el$18, "left", _v$16, _p$.e));
+      _v$17 !== _p$.t && (_p$.t = _$setProp(_el$18, "top", _v$17, _p$.t));
+      _v$18 !== _p$.a && (_p$.a = _$setProp(_el$19, "fg", _v$18, _p$.a));
       return _p$;
     }, {
       e: undefined,
@@ -856,7 +863,8 @@ function SessionsByProject(props) {
       target = {
         group: entries[0].group,
         index: 0,
-        groupTarget: true
+        groupTarget: true,
+        line: entries[0].line
       };
     } else {
       const next = entries.find(item => item.line >= line);
@@ -865,29 +873,32 @@ function SessionsByProject(props) {
         target = {
           group: last.group,
           index: last.type === "row" ? last.group.rows.length : 0,
-          groupTarget: false
+          groupTarget: false,
+          line: last.line + 1
         };
       } else if (next.type === "group") {
         target = {
           group: next.group,
           index: 0,
-          groupTarget: true
+          groupTarget: true,
+          line: next.line
         };
       } else {
         target = {
           group: next.group,
           index: next.index,
-          groupTarget: false
+          groupTarget: false,
+          line: next.line
         };
       }
     }
     drag.target = target;
-    dragTrace(`move ${event?.x},${event?.y} -> ${target.group.key}:${target.index}`);
     setDropTarget({
       groupKey: target.group.key,
       index: target.index,
       group: target.groupTarget
     });
+    dragTrace(`move ${event?.x},${event?.y} -> ${target.group.key}:${target.index}`);
   };
   const endDrag = () => {
     const current = drag;
@@ -945,6 +956,7 @@ function SessionsByProject(props) {
       sessionID: session.id
     });
   };
+  const insertColor = () => context.theme.hue?.accent?.[500] ?? context.theme.text.feedback?.info?.base;
   return (() => {
     var _el$20 = _$createElement("box"),
       _el$21 = _$createElement("box"),
@@ -1095,32 +1107,35 @@ function SessionsByProject(props) {
             }
           }), null);
           _$effect(_p$ => {
-            var _v$20 = dropTarget()?.groupKey === group.key && dropTarget()?.group ? context.theme.background?.action?.primary?.hovered ?? context.theme.background?.element : undefined,
-              _v$21 = context.theme.text.muted,
-              _v$22 = context.theme.text.base,
-              _v$23 = context.theme.text.base;
-            _v$20 !== _p$.e && (_p$.e = _$setProp(_el$30, "backgroundColor", _v$20, _p$.e));
-            _v$21 !== _p$.t && (_p$.t = _$setProp(_el$32, "fg", _v$21, _p$.t));
-            _v$22 !== _p$.a && (_p$.a = _$setProp(_el$33, "fg", _v$22, _p$.a));
-            _v$23 !== _p$.o && (_p$.o = _$setProp(_el$34, "fg", _v$23, _p$.o));
+            var _v$22 = dropTarget()?.groupKey === group.key && dropTarget()?.group ? ["left"] : undefined,
+              _v$23 = dropTarget()?.groupKey === group.key && dropTarget()?.group ? insertColor() : undefined,
+              _v$24 = context.theme.text.muted,
+              _v$25 = context.theme.text.base,
+              _v$26 = context.theme.text.base;
+            _v$22 !== _p$.e && (_p$.e = _$setProp(_el$30, "border", _v$22, _p$.e));
+            _v$23 !== _p$.t && (_p$.t = _$setProp(_el$30, "borderColor", _v$23, _p$.t));
+            _v$24 !== _p$.a && (_p$.a = _$setProp(_el$32, "fg", _v$24, _p$.a));
+            _v$25 !== _p$.o && (_p$.o = _$setProp(_el$33, "fg", _v$25, _p$.o));
+            _v$26 !== _p$.i && (_p$.i = _$setProp(_el$34, "fg", _v$26, _p$.i));
             return _p$;
           }, {
             e: undefined,
             t: undefined,
             a: undefined,
-            o: undefined
+            o: undefined,
+            i: undefined
           });
           return _el$29;
         })();
       }
     }), null);
     _$effect(_p$ => {
-      var _v$17 = context.theme.text.base,
-        _v$18 = props.showArchived() ? context.theme.hue?.orange?.[200] ?? context.theme.text.base : context.theme.text.muted,
-        _v$19 = context.theme.text.muted;
-      _v$17 !== _p$.e && (_p$.e = _$setProp(_el$22, "fg", _v$17, _p$.e));
-      _v$18 !== _p$.t && (_p$.t = _$setProp(_el$25, "fg", _v$18, _p$.t));
-      _v$19 !== _p$.a && (_p$.a = _$setProp(_el$27, "fg", _v$19, _p$.a));
+      var _v$19 = context.theme.text.base,
+        _v$20 = props.showArchived() ? context.theme.hue?.orange?.[200] ?? context.theme.text.base : context.theme.text.muted,
+        _v$21 = context.theme.text.muted;
+      _v$19 !== _p$.e && (_p$.e = _$setProp(_el$22, "fg", _v$19, _p$.e));
+      _v$20 !== _p$.t && (_p$.t = _$setProp(_el$25, "fg", _v$20, _p$.t));
+      _v$21 !== _p$.a && (_p$.a = _$setProp(_el$27, "fg", _v$21, _p$.a));
       return _p$;
     }, {
       e: undefined,
