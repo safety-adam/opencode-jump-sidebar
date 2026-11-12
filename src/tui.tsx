@@ -291,12 +291,6 @@ function TodoPanel(props: {
   )
 }
 
-function dragTrace(message: string) {
-  try {
-    appendFileSync("/tmp/jump-drag.log", `${new Date().toISOString()} ${message}\n`)
-  } catch {}
-}
-
 function groupSessions(
   sessions: any[],
   projects: any[],
@@ -375,8 +369,6 @@ function SessionRow(props: {
     unread: boolean
   }) => void
   onDragStart?: (event: any) => void
-  onDrag?: (event: any) => void
-  drop?: boolean
   dragging?: boolean
   childMap?: () => Map<string, any[]>
 }) {
@@ -487,8 +479,6 @@ function SessionRow(props: {
 
   const dragBg = () =>
     context.theme.scrollbar?.base ?? context.theme.background?.element
-  const insertColor = () =>
-    context.theme.hue?.accent?.[500] ?? context.theme.text.feedback?.info?.base
 
   return (
     <box
@@ -496,10 +486,7 @@ function SessionRow(props: {
       gap={1}
       paddingRight={1}
       backgroundColor={props.dragging ? dragBg() : rowBg()}
-      border={props.drop ? ["left"] : undefined}
-      borderColor={props.drop ? insertColor() : undefined}
       onMouseDown={(e: any) => props.onDragStart?.(e)}
-      onMouseDrag={(e: any) => props.onDrag?.(e)}
       onMouseUp={(e: any) => {
         if (e?.button === 2) {
           e.preventDefault?.()
@@ -818,21 +805,22 @@ function SessionsByProject(props: {
     return map
   })
 
-  const [dropTarget, setDropTarget] = createSignal<{
-    groupKey: string
-    index: number
-    group: boolean
+  const [preview, setPreview] = createSignal<{
+    sessionID: string
+    sourceKey: string
+    targetKey: string
+    targetIndex: number
   }>()
-  const [draggingSession, setDraggingSession] = createSignal<string>()
   let drag:
     | {
         sessionID: string
         sourceKey: string
         sourceIndex: number
         contentTop: number
-        target?: { group: any; index: number; groupTarget: boolean; line: number }
+        target?: { group: any; index: number; groupTarget: boolean }
       }
     | undefined
+  let pendingDrop: SessionMoveRequest | undefined
   let suppressOpenUntil = 0
 
   // One entry per rendered line, so a drag can map the pointer row to a group
@@ -862,10 +850,8 @@ function SessionsByProject(props: {
   }
 
   const beginDrag = (session: any, group: any, event: any) => {
-    dragTrace(`begin ${session.id} ${event?.x},${event?.y} button=${event?.button}`)
     if (event?.button !== 0) return
     const entry = layout().find((item) => item.type === "row" && item.row.id === session.id)
-    dragTrace(`begin entry=${entry ? entry.index : "none"} line=${entry ? entry.line : "none"}`)
     if (!entry) return
     drag = {
       sessionID: session.id,
@@ -874,7 +860,12 @@ function SessionsByProject(props: {
       contentTop: event.y - entry.line,
       target: undefined,
     }
-    setDraggingSession(session.id)
+    setPreview({
+      sessionID: session.id,
+      sourceKey: group.key,
+      targetKey: group.key,
+      targetIndex: entry.index,
+    })
   }
 
   const updateDrag = (event: any) => {
@@ -882,9 +873,9 @@ function SessionsByProject(props: {
     const entries = layout()
     if (!entries.length) return
     const line = event.y - drag.contentTop
-    let target: { group: any; index: number; groupTarget: boolean; line: number }
+    let target: { group: any; index: number; groupTarget: boolean }
     if (line <= entries[0].line) {
-      target = { group: entries[0].group, index: 0, groupTarget: true, line: entries[0].line }
+      target = { group: entries[0].group, index: 0, groupTarget: true }
     } else {
       const next = entries.find((item) => item.line >= line)
       if (!next) {
@@ -893,29 +884,26 @@ function SessionsByProject(props: {
           group: last.group,
           index: last.type === "row" ? last.group.rows.length : 0,
           groupTarget: false,
-          line: last.line + 1,
         }
       } else if (next.type === "group") {
-        target = { group: next.group, index: 0, groupTarget: true, line: next.line }
+        target = { group: next.group, index: 0, groupTarget: true }
       } else {
-        target = { group: next.group, index: next.index, groupTarget: false, line: next.line }
+        target = { group: next.group, index: next.index, groupTarget: false }
       }
     }
     drag.target = target
-    setDropTarget({
-      groupKey: target.group.key,
-      index: target.index,
-      group: target.groupTarget,
+    setPreview({
+      sessionID: drag.sessionID,
+      sourceKey: drag.sourceKey,
+      targetKey: target.group.key,
+      targetIndex: target.index,
     })
-    dragTrace(`move ${event?.x},${event?.y} -> ${target.group.key}:${target.index}`)
   }
 
-  const endDrag = () => {
+  const finishDrag = () => {
     const current = drag
-    dragTrace(`end target=${current?.target ? `${current.target.group.key}:${current.target.index}` : "none"}`)
     drag = undefined
-    setDraggingSession(undefined)
-    setDropTarget(undefined)
+    setPreview(undefined)
     if (!current || !current.target) return
     suppressOpenUntil = Date.now() + 300
     const source = groups().find((group) => group.key === current.sourceKey)
@@ -961,7 +949,9 @@ function SessionsByProject(props: {
         sessionID,
       )
     }
-    props.onDrop({
+    // Queue the drop and only commit it on mouse up. A drag end arriving while
+    // the mouse is still down must not move the session.
+    pendingDrop = {
       sessionID,
       sourceKey: source.dir || source.key,
       targetKey: target.dir || target.key,
@@ -969,11 +959,24 @@ function SessionsByProject(props: {
       targetDir: target.dir,
       sourceOrder,
       targetOrder,
-    })
+    }
+  }
+
+  const commitPendingDrop = () => {
+    if (!pendingDrop && drag) finishDrag()
+    const pending = pendingDrop
+    pendingDrop = undefined
+    if (!pending) {
+      drag = undefined
+      setPreview(undefined)
+      return
+    }
+    suppressOpenUntil = Date.now() + 300
+    props.onDrop(pending)
   }
 
   const openSession = (session: any) => {
-    if (drag?.target) return
+    if (drag?.target || pendingDrop) return
     if (Date.now() < suppressOpenUntil) {
       suppressOpenUntil = 0
       return
@@ -982,8 +985,33 @@ function SessionsByProject(props: {
     context.ui.router.navigate({ type: "session", sessionID: session.id })
   }
 
-  const insertColor = () =>
-    context.theme.hue?.accent?.[500] ?? context.theme.text.feedback?.info?.base
+  const displayGroups = createMemo(() => {
+    const base = groups()
+    const p = preview()
+    if (!p) return base
+    return base.map((group) => {
+      if (group.key !== p.sourceKey && group.key !== p.targetKey) return group
+      const source = base.find((item) => item.key === p.sourceKey)
+      const session = source?.rows.find((row: any) => row.id === p.sessionID)
+      if (!session) return group
+      if (group.key === p.sourceKey && group.key === p.targetKey) {
+        const rows = group.rows.filter((row: any) => row.id !== p.sessionID)
+        const insert = Math.max(0, Math.min(p.targetIndex, rows.length))
+        rows.splice(insert, 0, session)
+        return { ...group, rows }
+      }
+      if (group.key === p.sourceKey) {
+        return {
+          ...group,
+          rows: group.rows.filter((row: any) => row.id !== p.sessionID),
+        }
+      }
+      const rows = [...group.rows]
+      const insert = Math.max(0, Math.min(p.targetIndex, rows.length))
+      rows.splice(insert, 0, session)
+      return { ...group, rows }
+    })
+  })
 
   return (
     <box
@@ -991,8 +1019,8 @@ function SessionsByProject(props: {
       paddingTop={1}
       gap={1}
       onMouseDrag={(event: any) => updateDrag(event)}
-      onMouseDragEnd={endDrag}
-      onMouseUp={() => endDrag()}
+      onMouseDragEnd={finishDrag}
+      onMouseUp={commitPendingDrop}
     >
       <TodoPanel
         context={context}
@@ -1029,7 +1057,7 @@ function SessionsByProject(props: {
           </text>
         </box>
       </box>
-      <For each={groups()}>
+      <For each={displayGroups()}>
         {(group) => {
           const isCollapsed = () => props.collapsed()[group.key] === true
           return (
@@ -1038,12 +1066,6 @@ function SessionsByProject(props: {
                 flexDirection="row"
                 gap={1}
                 paddingRight={1}
-                border={
-                  dropTarget()?.groupKey === group.key && dropTarget()?.group ? ["left"] : undefined
-                }
-                borderColor={
-                  dropTarget()?.groupKey === group.key && dropTarget()?.group ? insertColor() : undefined
-                }
                 onMouseUp={(e: any) => {
                   if (e?.button !== 2) return
                   e.preventDefault?.()
@@ -1107,13 +1129,7 @@ function SessionsByProject(props: {
                         onOpenMenu={props.openMenu}
                         onOpen={() => openSession(session)}
                         onDragStart={(event: any) => beginDrag(session, group, event)}
-                        onDrag={(event: any) => updateDrag(event)}
-                        dragging={draggingSession() === session.id}
-                        drop={
-                          dropTarget()?.groupKey === group.key &&
-                          !dropTarget()?.group &&
-                          dropTarget()?.index === index()
-                        }
+                        dragging={preview()?.sessionID === session.id}
                         localUnread={props.unreadLocal()[session.id] === true}
                         childMap={childMap}
                       />
@@ -1622,14 +1638,6 @@ export default Plugin.define({
         draft[request.sourceKey] = request.sourceOrder
         draft[request.targetKey] = request.targetOrder
       })
-      dragTrace(
-        `drop ${request.sessionID.slice(-6)} before=${beforeTarget
-          .map((id) => id.slice(-6))
-          .join(",")} requested=${request.targetOrder.map((id) => id.slice(-6)).join(",")}`,
-      )
-      dragTrace(
-        `stored=${(order()[request.targetKey] ?? []).map((id) => id.slice(-6)).join(",")}`,
-      )
       if (!request.targetDir || request.sourceDir === request.targetDir) return
       try {
         await context.client.session.move({

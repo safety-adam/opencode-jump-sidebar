@@ -322,11 +322,6 @@ function TodoPanel(props) {
     }
   });
 }
-function dragTrace(message) {
-  try {
-    appendFileSync("/tmp/jump-drag.log", `${new Date().toISOString()} ${message}\n`);
-  } catch {}
-}
 function groupSessions(sessions, projects, showArchived, order) {
   const byId = new Map(projects.map(p => [p.id, p]));
   const archivedProjects = new Set(projects.filter(p => isArchivedTitle(p.name)).map(p => p.id));
@@ -472,7 +467,6 @@ function SessionRow(props) {
     return context.theme.text.muted;
   };
   const dragBg = () => context.theme.scrollbar?.base ?? context.theme.background?.element;
-  const insertColor = () => context.theme.hue?.accent?.[500] ?? context.theme.text.feedback?.info?.base;
   return (() => {
     var _el$9 = _$createElement("box"),
       _el$0 = _$createElement("text"),
@@ -483,7 +477,6 @@ function SessionRow(props) {
     _$setProp(_el$9, "gap", 1);
     _$setProp(_el$9, "paddingRight", 1);
     _$setProp(_el$9, "onMouseDown", e => props.onDragStart?.(e));
-    _$setProp(_el$9, "onMouseDrag", e => props.onDrag?.(e));
     _$setProp(_el$9, "onMouseUp", e => {
       if (e?.button === 2) {
         e.preventDefault?.();
@@ -537,28 +530,22 @@ function SessionRow(props) {
     _$insert(_el$12, () => displayTitle(props.session));
     _$effect(_p$ => {
       var _v$6 = props.dragging ? dragBg() : rowBg(),
-        _v$7 = props.drop ? ["left"] : undefined,
-        _v$8 = props.drop ? insertColor() : undefined,
-        _v$9 = iconColor(),
-        _v$0 = props.dragging ? context.theme.text.base : titleColor(),
-        _v$1 = active() ? 1 : 0,
-        _v$10 = props.dragging ? dragBg() : undefined;
+        _v$7 = iconColor(),
+        _v$8 = props.dragging ? context.theme.text.base : titleColor(),
+        _v$9 = active() ? 1 : 0,
+        _v$0 = props.dragging ? dragBg() : undefined;
       _v$6 !== _p$.e && (_p$.e = _$setProp(_el$9, "backgroundColor", _v$6, _p$.e));
-      _v$7 !== _p$.t && (_p$.t = _$setProp(_el$9, "border", _v$7, _p$.t));
-      _v$8 !== _p$.a && (_p$.a = _$setProp(_el$9, "borderColor", _v$8, _p$.a));
-      _v$9 !== _p$.o && (_p$.o = _$setProp(_el$0, "fg", _v$9, _p$.o));
-      _v$0 !== _p$.i && (_p$.i = _$setProp(_el$12, "fg", _v$0, _p$.i));
-      _v$1 !== _p$.n && (_p$.n = _$setProp(_el$12, "attributes", _v$1, _p$.n));
-      _v$10 !== _p$.s && (_p$.s = _$setProp(_el$12, "backgroundColor", _v$10, _p$.s));
+      _v$7 !== _p$.t && (_p$.t = _$setProp(_el$0, "fg", _v$7, _p$.t));
+      _v$8 !== _p$.a && (_p$.a = _$setProp(_el$12, "fg", _v$8, _p$.a));
+      _v$9 !== _p$.o && (_p$.o = _$setProp(_el$12, "attributes", _v$9, _p$.o));
+      _v$0 !== _p$.i && (_p$.i = _$setProp(_el$12, "backgroundColor", _v$0, _p$.i));
       return _p$;
     }, {
       e: undefined,
       t: undefined,
       a: undefined,
       o: undefined,
-      i: undefined,
-      n: undefined,
-      s: undefined
+      i: undefined
     });
     return _el$9;
   })();
@@ -668,10 +655,10 @@ function SessionContextMenu(props) {
         _$setProp(_el$16, "truncate", true);
         _$insert(_el$16, () => item.label);
         _$effect(_p$ => {
-          var _v$14 = index() === selected() ? hovered : background,
-            _v$15 = context.theme.text.base;
-          _v$14 !== _p$.e && (_p$.e = _$setProp(_el$15, "backgroundColor", _v$14, _p$.e));
-          _v$15 !== _p$.t && (_p$.t = _$setProp(_el$16, "fg", _v$15, _p$.t));
+          var _v$12 = index() === selected() ? hovered : background,
+            _v$13 = context.theme.text.base;
+          _v$12 !== _p$.e && (_p$.e = _$setProp(_el$15, "backgroundColor", _v$12, _p$.e));
+          _v$13 !== _p$.t && (_p$.t = _$setProp(_el$16, "fg", _v$13, _p$.t));
           return _p$;
         }, {
           e: undefined,
@@ -681,12 +668,12 @@ function SessionContextMenu(props) {
       })()
     }));
     _$effect(_p$ => {
-      var _v$11 = left(),
-        _v$12 = top(),
-        _v$13 = items().length;
-      _v$11 !== _p$.e && (_p$.e = _$setProp(_el$14, "left", _v$11, _p$.e));
-      _v$12 !== _p$.t && (_p$.t = _$setProp(_el$14, "top", _v$12, _p$.t));
-      _v$13 !== _p$.a && (_p$.a = _$setProp(_el$14, "height", _v$13, _p$.a));
+      var _v$1 = left(),
+        _v$10 = top(),
+        _v$11 = items().length;
+      _v$1 !== _p$.e && (_p$.e = _$setProp(_el$14, "left", _v$1, _p$.e));
+      _v$10 !== _p$.t && (_p$.t = _$setProp(_el$14, "top", _v$10, _p$.t));
+      _v$11 !== _p$.a && (_p$.a = _$setProp(_el$14, "height", _v$11, _p$.a));
       return _p$;
     }, {
       e: undefined,
@@ -768,12 +755,12 @@ function ProjectContextMenu(props) {
     _$setProp(_el$19, "truncate", true);
     _$insert(_el$19, label);
     _$effect(_p$ => {
-      var _v$16 = left(),
-        _v$17 = top(),
-        _v$18 = context.theme.text.base;
-      _v$16 !== _p$.e && (_p$.e = _$setProp(_el$18, "left", _v$16, _p$.e));
-      _v$17 !== _p$.t && (_p$.t = _$setProp(_el$18, "top", _v$17, _p$.t));
-      _v$18 !== _p$.a && (_p$.a = _$setProp(_el$19, "fg", _v$18, _p$.a));
+      var _v$14 = left(),
+        _v$15 = top(),
+        _v$16 = context.theme.text.base;
+      _v$14 !== _p$.e && (_p$.e = _$setProp(_el$18, "left", _v$14, _p$.e));
+      _v$15 !== _p$.t && (_p$.t = _$setProp(_el$18, "top", _v$15, _p$.t));
+      _v$16 !== _p$.a && (_p$.a = _$setProp(_el$19, "fg", _v$16, _p$.a));
       return _p$;
     }, {
       e: undefined,
@@ -803,9 +790,9 @@ function SessionsByProject(props) {
     }
     return map;
   });
-  const [dropTarget, setDropTarget] = createSignal();
-  const [draggingSession, setDraggingSession] = createSignal();
+  const [preview, setPreview] = createSignal();
   let drag;
+  let pendingDrop;
   let suppressOpenUntil = 0;
 
   // One entry per rendered line, so a drag can map the pointer row to a group
@@ -839,10 +826,8 @@ function SessionsByProject(props) {
     return entries;
   };
   const beginDrag = (session, group, event) => {
-    dragTrace(`begin ${session.id} ${event?.x},${event?.y} button=${event?.button}`);
     if (event?.button !== 0) return;
     const entry = layout().find(item => item.type === "row" && item.row.id === session.id);
-    dragTrace(`begin entry=${entry ? entry.index : "none"} line=${entry ? entry.line : "none"}`);
     if (!entry) return;
     drag = {
       sessionID: session.id,
@@ -851,7 +836,12 @@ function SessionsByProject(props) {
       contentTop: event.y - entry.line,
       target: undefined
     };
-    setDraggingSession(session.id);
+    setPreview({
+      sessionID: session.id,
+      sourceKey: group.key,
+      targetKey: group.key,
+      targetIndex: entry.index
+    });
   };
   const updateDrag = event => {
     if (!drag) return;
@@ -863,8 +853,7 @@ function SessionsByProject(props) {
       target = {
         group: entries[0].group,
         index: 0,
-        groupTarget: true,
-        line: entries[0].line
+        groupTarget: true
       };
     } else {
       const next = entries.find(item => item.line >= line);
@@ -873,39 +862,34 @@ function SessionsByProject(props) {
         target = {
           group: last.group,
           index: last.type === "row" ? last.group.rows.length : 0,
-          groupTarget: false,
-          line: last.line + 1
+          groupTarget: false
         };
       } else if (next.type === "group") {
         target = {
           group: next.group,
           index: 0,
-          groupTarget: true,
-          line: next.line
+          groupTarget: true
         };
       } else {
         target = {
           group: next.group,
           index: next.index,
-          groupTarget: false,
-          line: next.line
+          groupTarget: false
         };
       }
     }
     drag.target = target;
-    setDropTarget({
-      groupKey: target.group.key,
-      index: target.index,
-      group: target.groupTarget
+    setPreview({
+      sessionID: drag.sessionID,
+      sourceKey: drag.sourceKey,
+      targetKey: target.group.key,
+      targetIndex: target.index
     });
-    dragTrace(`move ${event?.x},${event?.y} -> ${target.group.key}:${target.index}`);
   };
-  const endDrag = () => {
+  const finishDrag = () => {
     const current = drag;
-    dragTrace(`end target=${current?.target ? `${current.target.group.key}:${current.target.index}` : "none"}`);
     drag = undefined;
-    setDraggingSession(undefined);
-    setDropTarget(undefined);
+    setPreview(undefined);
     if (!current || !current.target) return;
     suppressOpenUntil = Date.now() + 300;
     const source = groups().find(group => group.key === current.sourceKey);
@@ -934,7 +918,9 @@ function SessionsByProject(props) {
       const at = last ? targetOrder.indexOf(last) + 1 : 0;
       targetOrder.splice(at < 0 || at > targetOrder.length ? targetOrder.length : at, 0, sessionID);
     }
-    props.onDrop({
+    // Queue the drop and only commit it on mouse up. A drag end arriving while
+    // the mouse is still down must not move the session.
+    pendingDrop = {
       sessionID,
       sourceKey: source.dir || source.key,
       targetKey: target.dir || target.key,
@@ -942,10 +928,22 @@ function SessionsByProject(props) {
       targetDir: target.dir,
       sourceOrder,
       targetOrder
-    });
+    };
+  };
+  const commitPendingDrop = () => {
+    if (!pendingDrop && drag) finishDrag();
+    const pending = pendingDrop;
+    pendingDrop = undefined;
+    if (!pending) {
+      drag = undefined;
+      setPreview(undefined);
+      return;
+    }
+    suppressOpenUntil = Date.now() + 300;
+    props.onDrop(pending);
   };
   const openSession = session => {
-    if (drag?.target) return;
+    if (drag?.target || pendingDrop) return;
     if (Date.now() < suppressOpenUntil) {
       suppressOpenUntil = 0;
       return;
@@ -956,7 +954,39 @@ function SessionsByProject(props) {
       sessionID: session.id
     });
   };
-  const insertColor = () => context.theme.hue?.accent?.[500] ?? context.theme.text.feedback?.info?.base;
+  const displayGroups = createMemo(() => {
+    const base = groups();
+    const p = preview();
+    if (!p) return base;
+    return base.map(group => {
+      if (group.key !== p.sourceKey && group.key !== p.targetKey) return group;
+      const source = base.find(item => item.key === p.sourceKey);
+      const session = source?.rows.find(row => row.id === p.sessionID);
+      if (!session) return group;
+      if (group.key === p.sourceKey && group.key === p.targetKey) {
+        const rows = group.rows.filter(row => row.id !== p.sessionID);
+        const insert = Math.max(0, Math.min(p.targetIndex, rows.length));
+        rows.splice(insert, 0, session);
+        return {
+          ...group,
+          rows
+        };
+      }
+      if (group.key === p.sourceKey) {
+        return {
+          ...group,
+          rows: group.rows.filter(row => row.id !== p.sessionID)
+        };
+      }
+      const rows = [...group.rows];
+      const insert = Math.max(0, Math.min(p.targetIndex, rows.length));
+      rows.splice(insert, 0, session);
+      return {
+        ...group,
+        rows
+      };
+    });
+  });
   return (() => {
     var _el$20 = _$createElement("box"),
       _el$21 = _$createElement("box"),
@@ -969,8 +999,8 @@ function SessionsByProject(props) {
     _$setProp(_el$20, "paddingTop", 1);
     _$setProp(_el$20, "gap", 1);
     _$setProp(_el$20, "onMouseDrag", event => updateDrag(event));
-    _$setProp(_el$20, "onMouseDragEnd", endDrag);
-    _$setProp(_el$20, "onMouseUp", () => endDrag());
+    _$setProp(_el$20, "onMouseDragEnd", finishDrag);
+    _$setProp(_el$20, "onMouseUp", commitPendingDrop);
     _$insert(_el$20, _$createComponent(TodoPanel, {
       context: context,
       get sessionID() {
@@ -1004,7 +1034,7 @@ function SessionsByProject(props) {
     _$setProp(_el$27, "onMouseUp", () => props.newProject());
     _$insert(_el$20, _$createComponent(For, {
       get each() {
-        return groups();
+        return displayGroups();
       },
       children: group => {
         const isCollapsed = () => props.collapsed()[group.key] === true;
@@ -1091,12 +1121,8 @@ function SessionsByProject(props) {
                   },
                   onOpen: () => openSession(session),
                   onDragStart: event => beginDrag(session, group, event),
-                  onDrag: event => updateDrag(event),
                   get dragging() {
-                    return draggingSession() === session.id;
-                  },
-                  get drop() {
-                    return _$memo(() => !!(dropTarget()?.groupKey === group.key && !dropTarget()?.group))() && dropTarget()?.index === index();
+                    return preview()?.sessionID === session.id;
                   },
                   get localUnread() {
                     return props.unreadLocal()[session.id] === true;
@@ -1107,35 +1133,29 @@ function SessionsByProject(props) {
             }
           }), null);
           _$effect(_p$ => {
-            var _v$22 = dropTarget()?.groupKey === group.key && dropTarget()?.group ? ["left"] : undefined,
-              _v$23 = dropTarget()?.groupKey === group.key && dropTarget()?.group ? insertColor() : undefined,
-              _v$24 = context.theme.text.muted,
-              _v$25 = context.theme.text.base,
-              _v$26 = context.theme.text.base;
-            _v$22 !== _p$.e && (_p$.e = _$setProp(_el$30, "border", _v$22, _p$.e));
-            _v$23 !== _p$.t && (_p$.t = _$setProp(_el$30, "borderColor", _v$23, _p$.t));
-            _v$24 !== _p$.a && (_p$.a = _$setProp(_el$32, "fg", _v$24, _p$.a));
-            _v$25 !== _p$.o && (_p$.o = _$setProp(_el$33, "fg", _v$25, _p$.o));
-            _v$26 !== _p$.i && (_p$.i = _$setProp(_el$34, "fg", _v$26, _p$.i));
+            var _v$20 = context.theme.text.muted,
+              _v$21 = context.theme.text.base,
+              _v$22 = context.theme.text.base;
+            _v$20 !== _p$.e && (_p$.e = _$setProp(_el$32, "fg", _v$20, _p$.e));
+            _v$21 !== _p$.t && (_p$.t = _$setProp(_el$33, "fg", _v$21, _p$.t));
+            _v$22 !== _p$.a && (_p$.a = _$setProp(_el$34, "fg", _v$22, _p$.a));
             return _p$;
           }, {
             e: undefined,
             t: undefined,
-            a: undefined,
-            o: undefined,
-            i: undefined
+            a: undefined
           });
           return _el$29;
         })();
       }
     }), null);
     _$effect(_p$ => {
-      var _v$19 = context.theme.text.base,
-        _v$20 = props.showArchived() ? context.theme.hue?.orange?.[200] ?? context.theme.text.base : context.theme.text.muted,
-        _v$21 = context.theme.text.muted;
-      _v$19 !== _p$.e && (_p$.e = _$setProp(_el$22, "fg", _v$19, _p$.e));
-      _v$20 !== _p$.t && (_p$.t = _$setProp(_el$25, "fg", _v$20, _p$.t));
-      _v$21 !== _p$.a && (_p$.a = _$setProp(_el$27, "fg", _v$21, _p$.a));
+      var _v$17 = context.theme.text.base,
+        _v$18 = props.showArchived() ? context.theme.hue?.orange?.[200] ?? context.theme.text.base : context.theme.text.muted,
+        _v$19 = context.theme.text.muted;
+      _v$17 !== _p$.e && (_p$.e = _$setProp(_el$22, "fg", _v$17, _p$.e));
+      _v$18 !== _p$.t && (_p$.t = _$setProp(_el$25, "fg", _v$18, _p$.t));
+      _v$19 !== _p$.a && (_p$.a = _$setProp(_el$27, "fg", _v$19, _p$.a));
       return _p$;
     }, {
       e: undefined,
@@ -1631,8 +1651,6 @@ export default Plugin.define({
         draft[request.sourceKey] = request.sourceOrder;
         draft[request.targetKey] = request.targetOrder;
       });
-      dragTrace(`drop ${request.sessionID.slice(-6)} before=${beforeTarget.map(id => id.slice(-6)).join(",")} requested=${request.targetOrder.map(id => id.slice(-6)).join(",")}`);
-      dragTrace(`stored=${(order()[request.targetKey] ?? []).map(id => id.slice(-6)).join(",")}`);
       if (!request.targetDir || request.sourceDir === request.targetDir) return;
       try {
         await context.client.session.move({
