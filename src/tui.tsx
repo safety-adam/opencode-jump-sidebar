@@ -760,7 +760,7 @@ function ProjectContextMenu(props: {
 
 function SessionsByProject(props: {
   context: any
-  sessionID?: string
+  sessionID?: string | (() => string | undefined)
   sessions: () => any[]
   revision: () => void
   projects: () => any[]
@@ -781,6 +781,8 @@ function SessionsByProject(props: {
   decorations: () => Record<string, Decoration>
 }) {
   const context = props.context
+  const currentSessionID = () =>
+    typeof props.sessionID === "function" ? props.sessionID() : props.sessionID
   const groups = createMemo(() =>
     groupSessions(props.sessions(), props.projects(), props.showArchived(), props.order()),
   )
@@ -1124,7 +1126,7 @@ function SessionsByProject(props: {
                           Boolean(tabs().get(session.id)?.unread) ||
                           props.unreadLocal()[session.id] === true
                         }
-                        current={session.id === props.sessionID}
+                        current={session.id === currentSessionID()}
                         decoration={props.decorations()[session.id]}
                         onOpenMenu={props.openMenu}
                         onOpen={() => openSession(session)}
@@ -1177,7 +1179,6 @@ function McpStatus(props: { context: any }) {
 
 function HomeSidebar(props: { context: any; children?: any }) {
   const context = props.context
-  const route = createMemo(() => context.ui.router.current())
   const readWidth = () =>
     context.renderer?.width ?? context.renderer?.size?.width ?? (globalThis as any)?.process?.stdout?.columns ?? 0
   const [width, setWidth] = createSignal<number>(readWidth() || 0)
@@ -1187,11 +1188,17 @@ function HomeSidebar(props: { context: any; children?: any }) {
   }, 500)
   onCleanup(() => clearInterval(timer))
 
+  // Keep this panel above the host sidebar, mounted for every route, so its
+  // scroll position survives a session change.
   return (
-    <Show when={route()?.type === "home" && width() >= 120}>
+    <Show when={width() >= 120}>
       <box
         position="absolute"
+        zIndex={1000}
         top={1}
+        right={0}
+        bottom={0}
+        width={44}
         right={0}
         bottom={0}
         width={44}
@@ -1924,7 +1931,13 @@ export default Plugin.define({
     const sessionsPanel = (sessionID?: string) => (
       <SessionsByProject
         context={context}
-        sessionID={sessionID}
+        sessionID={
+          sessionID ??
+          (() => {
+            const route = context.ui.router.current()
+            return route?.type === "session" ? route.sessionID : undefined
+          })
+        }
         sessions={sessions}
         revision={revision}
         projects={projects}
@@ -1946,9 +1959,11 @@ export default Plugin.define({
       />
     )
 
+    // Session routes use the app-level overlay below, not a new sidebar content
+    // tree per session. Keeping that overlay mounted keeps its scroll position.
     context.ui.slot({
       replace: "sidebar.content",
-      render: (input: any) => sessionsPanel(input?.sessionID),
+      render: () => null,
     })
 
     // The built-in sidebar footer repeats the working directory. Keep it in the

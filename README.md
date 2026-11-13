@@ -91,7 +91,7 @@ The session sidebar gets a **Todos** section above the **Jump to session** secti
 - right-click a project for Archive project or Unarchive project. A confirmation asks first. Archiving a project also archives every session in it that is not already archived. Archived projects are hidden unless `≡` is on;
 - the unread flag clears when you open the session. It is stored on this machine, so it does not change OpenCode's own unread state or other devices;
 - the `≡` toggle shows or hides archived sessions. A session is archived when its title starts with `[Archived] `;
-- the same panel appears on the home and new-session screen as a right-hand overlay when the terminal is at least 120 columns wide.
+- the same panel is shared across the home screen and every session, so its scroll position is retained as you move between them. It appears as a right-hand overlay when the terminal is at least 120 columns wide.
 
 Press `Ctrl+X` then `Z` to archive or unarchive the current session, the same
 title convention as the `/archive` command.
