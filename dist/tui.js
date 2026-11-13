@@ -557,6 +557,9 @@ function SessionContextMenu(props) {
   const [selected, setSelected] = createSignal(0);
   const width = 20;
   const items = () => [{
+    label: "Rename",
+    run: () => props.onRename(props.state.session.id)
+  }, {
     label: props.state.archived ? "Unarchive" : "Archive",
     run: () => props.onArchive(props.state.session.id)
   }, {
@@ -1521,6 +1524,37 @@ export default Plugin.define({
       }
     };
 
+    // Rename a session from the right-click menu, using the same title prompt as
+    // the new project prompt.
+    const renameSession = async sessionID => {
+      const session = sessions().find(s => s.id === sessionID);
+      const title = session?.title || defaultTitle(session);
+      let input = "";
+      try {
+        input = (await context.ui.dialog.prompt({
+          title: "Rename session",
+          placeholder: "Session title",
+          value: title
+        })) ?? "";
+      } catch {
+        return;
+      }
+      const next = String(input).trim();
+      if (!next || next === title) return;
+      try {
+        await context.client.session.update({
+          sessionID,
+          title: next
+        });
+        schedule();
+      } catch (err) {
+        context.ui.toast.show({
+          message: `Rename failed: ${err?.message ?? err}`,
+          variant: "error"
+        });
+      }
+    };
+
     // Sessions that belong to a project, using the same key rules as the sidebar
     // grouping, and that still need archiving.
     const projectChildren = project => {
@@ -2029,6 +2063,10 @@ export default Plugin.define({
           onDelete: sessionID => {
             closeSessionMenu();
             void deleteSession(sessionID);
+          },
+          onRename: sessionID => {
+            closeSessionMenu();
+            void renameSession(sessionID);
           }
         })
       })
