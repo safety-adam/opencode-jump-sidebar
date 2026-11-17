@@ -958,39 +958,27 @@ function SessionsByProject(props) {
       sessionID: session.id
     });
   };
-  const displayGroups = createMemo(() => {
-    const base = groups();
+  const rowsFor = group => {
     const p = preview();
-    if (!p) return base;
-    return base.map(group => {
-      if (group.key !== p.sourceKey && group.key !== p.targetKey) return group;
-      const source = base.find(item => item.key === p.sourceKey);
-      const session = source?.rows.find(row => row.id === p.sessionID);
-      if (!session) return group;
-      if (group.key === p.sourceKey && group.key === p.targetKey) {
-        const rows = group.rows.filter(row => row.id !== p.sessionID);
-        const insert = Math.max(0, Math.min(p.targetIndex, rows.length));
-        rows.splice(insert, 0, session);
-        return {
-          ...group,
-          rows
-        };
-      }
-      if (group.key === p.sourceKey) {
-        return {
-          ...group,
-          rows: group.rows.filter(row => row.id !== p.sessionID)
-        };
-      }
-      const rows = [...group.rows];
+    if (!p) return group.rows;
+    if (group.key !== p.sourceKey && group.key !== p.targetKey) return group.rows;
+    const source = groups().find(item => item.key === p.sourceKey);
+    const session = source?.rows.find(row => row.id === p.sessionID);
+    if (!session) return group.rows;
+    if (group.key === p.sourceKey && group.key === p.targetKey) {
+      const rows = group.rows.filter(row => row.id !== p.sessionID);
       const insert = Math.max(0, Math.min(p.targetIndex, rows.length));
       rows.splice(insert, 0, session);
-      return {
-        ...group,
-        rows
-      };
-    });
-  });
+      return rows;
+    }
+    if (group.key === p.sourceKey) {
+      return group.rows.filter(row => row.id !== p.sessionID);
+    }
+    const rows = [...group.rows];
+    const insert = Math.max(0, Math.min(p.targetIndex, rows.length));
+    rows.splice(insert, 0, session);
+    return rows;
+  };
   return (() => {
     var _el$20 = _$createElement("box"),
       _el$21 = _$createElement("box"),
@@ -1038,7 +1026,7 @@ function SessionsByProject(props) {
     _$setProp(_el$27, "onMouseUp", () => props.newProject());
     _$insert(_el$20, _$createComponent(For, {
       get each() {
-        return displayGroups();
+        return groups();
       },
       children: group => {
         const isCollapsed = () => props.collapsed()[group.key] === true;
@@ -1082,7 +1070,7 @@ function SessionsByProject(props) {
           _$setProp(_el$33, "truncate", true);
           _$setProp(_el$33, "flexGrow", 1);
           _$setProp(_el$33, "minWidth", 0);
-          _$insert(_el$33, () => `${group.label} (${group.rows.length})`);
+          _$insert(_el$33, () => `${group.label} (${rowsFor(group).length})`);
           _$insertNode(_el$34, _$createTextNode(`+`));
           _$setProp(_el$34, "selectable", false);
           _$setProp(_el$34, "flexShrink", 0);
@@ -1099,7 +1087,7 @@ function SessionsByProject(props) {
             get children() {
               return _$createComponent(For, {
                 get each() {
-                  return group.rows;
+                  return rowsFor(group);
                 },
                 children: (session, index) => _$createComponent(SessionRow, {
                   context: context,

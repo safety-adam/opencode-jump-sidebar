@@ -992,33 +992,27 @@ function SessionsByProject(props: {
     context.ui.router.navigate({ type: "session", sessionID: session.id })
   }
 
-  const displayGroups = createMemo(() => {
-    const base = groups()
+  const rowsFor = (group: any) => {
     const p = preview()
-    if (!p) return base
-    return base.map((group) => {
-      if (group.key !== p.sourceKey && group.key !== p.targetKey) return group
-      const source = base.find((item) => item.key === p.sourceKey)
-      const session = source?.rows.find((row: any) => row.id === p.sessionID)
-      if (!session) return group
-      if (group.key === p.sourceKey && group.key === p.targetKey) {
-        const rows = group.rows.filter((row: any) => row.id !== p.sessionID)
-        const insert = Math.max(0, Math.min(p.targetIndex, rows.length))
-        rows.splice(insert, 0, session)
-        return { ...group, rows }
-      }
-      if (group.key === p.sourceKey) {
-        return {
-          ...group,
-          rows: group.rows.filter((row: any) => row.id !== p.sessionID),
-        }
-      }
-      const rows = [...group.rows]
+    if (!p) return group.rows
+    if (group.key !== p.sourceKey && group.key !== p.targetKey) return group.rows
+    const source = groups().find((item) => item.key === p.sourceKey)
+    const session = source?.rows.find((row: any) => row.id === p.sessionID)
+    if (!session) return group.rows
+    if (group.key === p.sourceKey && group.key === p.targetKey) {
+      const rows = group.rows.filter((row: any) => row.id !== p.sessionID)
       const insert = Math.max(0, Math.min(p.targetIndex, rows.length))
       rows.splice(insert, 0, session)
-      return { ...group, rows }
-    })
-  })
+      return rows
+    }
+    if (group.key === p.sourceKey) {
+      return group.rows.filter((row: any) => row.id !== p.sessionID)
+    }
+    const rows = [...group.rows]
+    const insert = Math.max(0, Math.min(p.targetIndex, rows.length))
+    rows.splice(insert, 0, session)
+    return rows
+  }
 
   return (
     <box
@@ -1064,7 +1058,7 @@ function SessionsByProject(props: {
           </text>
         </box>
       </box>
-      <For each={displayGroups()}>
+      <For each={groups()}>
         {(group) => {
           const isCollapsed = () => props.collapsed()[group.key] === true
           return (
@@ -1102,7 +1096,7 @@ function SessionsByProject(props: {
                     flexGrow={1}
                     minWidth={0}
                   >
-                    {`${group.label} (${group.rows.length})`}
+                    {`${group.label} (${rowsFor(group).length})`}
                   </text>
                 </box>
                 <text selectable={false}
@@ -1119,7 +1113,7 @@ function SessionsByProject(props: {
                 </text>
               </box>
               <Show when={!isCollapsed()}>
-                <For each={group.rows}>
+                <For each={rowsFor(group)}>
                   {(session: any, index) => (
                     <SessionRow
                         context={context}
