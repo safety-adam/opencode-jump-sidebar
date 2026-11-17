@@ -30,6 +30,10 @@ function defaultTitle(session: any): string {
   return `${kind} session - ${new Date(created).toISOString()}`
 }
 
+// The sidebar's data refresh runs on events and a poll. A drag uses live row
+// previews, so a refresh while the mouse is held must not replace the rows.
+let dragInProgress = false
+
 function displayTitle(session: any): string {
   return session?.title || defaultTitle(session)
 }
@@ -860,6 +864,7 @@ function SessionsByProject(props: {
     if (event?.button !== 0) return
     const entry = layout().find((item) => item.type === "row" && item.row.id === session.id)
     if (!entry) return
+    dragInProgress = true
     drag = {
       sessionID: session.id,
       sourceKey: group.key,
@@ -910,6 +915,7 @@ function SessionsByProject(props: {
   const finishDrag = () => {
     const current = drag
     drag = undefined
+    dragInProgress = false
     setPreview(undefined)
     if (!current || !current.target) return
     suppressOpenUntil = Date.now() + 300
@@ -973,7 +979,7 @@ function SessionsByProject(props: {
     if (!pendingDrop && drag) finishDrag()
     const pending = pendingDrop
     pendingDrop = undefined
-    if (!pending) {
+    dragInProgress = false    if (!pending) {
       drag = undefined
       setPreview(undefined)
       return
@@ -1269,6 +1275,7 @@ export default Plugin.define({
 
     let refetchTimer: any
     const load = async () => {
+      if (dragInProgress) return
       setDecorations(readDecorations())
       try {
         // Bust the client's cached project list so deletions are picked up.
@@ -1349,6 +1356,7 @@ export default Plugin.define({
       setRevision((n) => n + 1)
     }
     const schedule = () => {
+      if (dragInProgress) return
       clearTimeout(refetchTimer)
       refetchTimer = setTimeout(() => void load(), 250)
     }
