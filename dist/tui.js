@@ -1508,12 +1508,13 @@ export default Plugin.define({
     const toggleArchive = async sessionID => {
       const session = sessions().find(s => s.id === sessionID) ?? context.data.session.get?.(sessionID);
       const title = session?.title ?? "";
-      const archived = isArchivedTitle(title);
+      const archived = isArchived(session);
       const next = archived ? toUnarchivedTitle(title) : toArchivedTitle(title);
       try {
         await context.client.session.update({
           sessionID,
-          title: next
+          title: next,
+          archived: !archived
         });
         schedule();
       } catch (err) {
@@ -1590,7 +1591,8 @@ export default Plugin.define({
           } : p));
           const results = await Promise.allSettled(children.map(s => context.client.session.update({
             sessionID: s.id,
-            title: toArchivedTitle(s.title || defaultTitle(s))
+            title: toArchivedTitle(s.title || defaultTitle(s)),
+            archived: true
           })));
           const failed = results.filter(r => r.status === "rejected").length;
           if (failed) {

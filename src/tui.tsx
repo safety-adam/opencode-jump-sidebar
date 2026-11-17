@@ -1508,10 +1508,10 @@ export default Plugin.define({
     const toggleArchive = async (sessionID: string) => {
       const session = sessions().find((s) => s.id === sessionID) ?? context.data.session.get?.(sessionID)
       const title = session?.title ?? ""
-      const archived = isArchivedTitle(title)
+      const archived = isArchived(session)
       const next = archived ? toUnarchivedTitle(title) : toArchivedTitle(title)
       try {
-        await context.client.session.update({ sessionID, title: next })
+        await context.client.session.update({ sessionID, title: next, archived: !archived })
         schedule()
       } catch (err: any) {
         context.ui.toast.show({ message: `Archive failed: ${err?.message ?? err}`, variant: "error" })
@@ -1585,6 +1585,7 @@ export default Plugin.define({
               context.client.session.update({
                 sessionID: s.id,
                 title: toArchivedTitle(s.title || defaultTitle(s)),
+                archived: true,
               }),
             ),
           )

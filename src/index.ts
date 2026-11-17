@@ -50,13 +50,20 @@ Target: ${target || "(none supplied — ask the user which project to delete)"}`
 
 function archiveInstructions(args: string): string {
   const target = args.trim()
-  return `Archive a session by prepending "${ARCHIVE_PREFIX}" to its title.
+  return `Archive a session. Archiving does two things. The title prefix hides it in the sidebar, and the server archive flag hides it in the app.
 
 1. Run \`opencode session list\` to get session IDs and titles.
-2. Find the target session. For the current session, use the most recently updated one that matches this conversation, or ask me to confirm if it is ambiguous. If a target is supplied, match it against the ID or title.
+2. Find the target session and note its full ID. For the current session, use the most recently updated one that matches this conversation, or ask me to confirm if it is ambiguous. If a target is supplied, match it against the ID or title.
 3. If the title already starts with "${ARCHIVE_PREFIX}", say it is already archived and stop.
 4. Call the \`set_session_title\` tool with the session's ID, or "self" if it is the current session, and the title "${ARCHIVE_PREFIX}" followed by the existing title.
-5. Confirm in one line, referring to the action as archiving. Say "Archived <title>", never "renamed" or "prepended".
+5. Mark it archived on the server, so the app drops it from its lists and search. Use the full session ID that starts with \`ses_\`, never "self":
+
+\`\`\`
+opencode api patch /api/session/<session id> --data '{"archived":true}'
+\`\`\`
+
+The command prints nothing and exits 0 when it works, and prints an error with a non zero exit when it fails. If it fails, say the session was retitled but not archived.
+6. Confirm in one line, referring to the action as archiving. Say "Archived <title>", never "renamed" or "prepended".
 
 Target: ${target || "(none supplied, use the current session)"}`
 }
