@@ -944,6 +944,7 @@ function SessionsByProject(props) {
     if (!pendingDrop && drag) finishDrag();
     const pending = pendingDrop;
     pendingDrop = undefined;
+    dragInProgress = false;
     if (!pending) {
       drag = undefined;
       setPreview(undefined);
